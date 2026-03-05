@@ -33,8 +33,12 @@ SOURCES = [
     {"url": "https://www.foundwork.art/opportunities", "category": "open_call", "name": "Foundwork"},
     {"url": "https://www.sundance.org/apply/", "category": "open_call", "name": "Sundance"},
     # Open calls — photography
-    {"url": "https://www.lensculture.com/competitions", "category": "open_call", "name": "LensCulture"},
+    {"url": "https://www.lensculture.com/competitions", "category": "contest", "name": "LensCulture"},
     {"url": "https://www.photolucida.org/calls-for-entry/", "category": "open_call", "name": "Photolucida"},
+    # Contests
+    {"url": "https://www.artaward.org", "category": "contest", "name": "Art Award"},
+    {"url": "https://www.1x.com/contest", "category": "contest", "name": "1x Photography Contest"},
+    {"url": "https://www.creativeboom.com/competitions/", "category": "contest", "name": "Creative Boom"},
     # Open calls — contemporary art (broad)
     {"url": "https://www.artsy.net/articles?tag=open-calls", "category": "open_call", "name": "Artsy Open Calls"},
     {"url": "https://www.e-flux.com/announcements/", "category": "open_call", "name": "e-flux Announcements"},
@@ -61,6 +65,9 @@ TAVILY_QUERIES = [
     "emerging artist opportunity residency grant 2026",
     "international art festival open call 2026",
     "photography prize competition award 2026",
+    "art contest 2026 cash prize open submissions",
+    "contemporary art competition 2026 enter apply",
+    "digital photography video art contest prize 2026",
 ]
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
@@ -110,7 +117,7 @@ Return a JSON array of objects with these fields:
 - fee (string or null)
 - award (string or null, prize money or stipend if mentioned)
 - url (string, the direct URL to apply or learn more)
-- category (string: "open_call" | "residency" | "commission" | "grant" | "festival")
+- category (string: "open_call" | "residency" | "commission" | "grant" | "festival" | "contest")
 - tags (array of strings: art forms, themes, or keywords)
 {inclusion_rule}
 Only include opportunities with upcoming deadlines (future dates). Return [] if none found.

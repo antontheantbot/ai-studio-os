@@ -7,7 +7,7 @@ import SearchBar from "@/components/SearchBar";
 import EmptyState from "@/components/EmptyState";
 import { getOpportunities, triggerOpportunityScan, type Opportunity } from "@/lib/api";
 
-const CATEGORIES = ["all", "open_call", "residency", "commission", "festival", "grant"];
+const CATEGORIES = ["all", "open_call", "residency", "commission", "festival", "grant", "contest"];
 
 export default function OpportunitiesPage() {
   const [query, setQuery] = useState("");
