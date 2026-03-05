@@ -30,6 +30,20 @@ async def _daily_scan_loop():
         await asyncio.sleep(24 * 60 * 60)
 
 
+async def _weekly_journalist_scan_loop():
+    """Scan for new journalists once per week."""
+    await asyncio.sleep(120)  # stagger after other scans
+    while True:
+        try:
+            logger.info("[Scheduler] Starting weekly journalist scan")
+            from app.agents.web_ingestor import scan_journalists
+            await scan_journalists()
+            logger.info("[Scheduler] Weekly journalist scan complete")
+        except Exception as e:
+            logger.error(f"[Scheduler] Journalist scan error: {e}")
+        await asyncio.sleep(7 * 24 * 60 * 60)
+
+
 async def _weekly_market_scan_loop():
     """Scan art market and generate creative brief once per week."""
     await asyncio.sleep(90)  # stagger after daily scan starts
@@ -51,9 +65,11 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     task = asyncio.create_task(_daily_scan_loop())
     market_task = asyncio.create_task(_weekly_market_scan_loop())
+    journalist_task = asyncio.create_task(_weekly_journalist_scan_loop())
     yield
     task.cancel()
     market_task.cancel()
+    journalist_task.cancel()
     await engine.dispose()
 
 

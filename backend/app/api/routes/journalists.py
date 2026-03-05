@@ -1,12 +1,37 @@
 import json
+import re
+import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 import sqlalchemy as sa
 
 from app.db.session import get_db
 from app.services.search import vector_search
+from app.services.embeddings import embed
+from app.services.llm import generate
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+PARSE_PROMPT = """Parse the following pasted text into a list of journalist profiles.
+The text may be formatted in any way — a list of names, copy-pasted bios, LinkedIn profiles, email signatures, or any mix.
+
+Return a JSON array where each object has:
+- name (string, full name — required)
+- bio (string, 2-3 sentences or null)
+- publications (array of strings, publications/outlets mentioned)
+- beats (array of strings, topics they cover e.g. "contemporary art", "architecture", "photography")
+- email (string, email address if present or null)
+- social_links (object with any of: twitter, instagram, linkedin, website — use full URLs)
+- location (string, city or null)
+- country (string or null)
+- notes (string, any useful context or null)
+
+If you cannot identify a person's name, skip that entry. Return [] if nothing parseable.
+
+Text to parse:
+{text}"""
 
 
 @router.get("/")
@@ -21,6 +46,72 @@ async def list_journalists(
         sa.text("SELECT * FROM journalists ORDER BY name LIMIT :limit"), {"limit": limit}
     )
     return [dict(r._mapping) for r in result]
+
+
+class PasteBody(BaseModel):
+    text: str
+
+
+@router.post("/add")
+async def add_from_text(body: PasteBody, db: AsyncSession = Depends(get_db)):
+    """Parse pasted text and add any journalist profiles found to the database."""
+    if not body.text.strip():
+        return {"added": 0, "skipped": 0, "message": "No text provided"}
+
+    raw = await generate(PARSE_PROMPT.format(text=body.text[:6000]))
+    match = re.search(r"\[.*\]", raw, re.DOTALL)
+    if not match:
+        return {"added": 0, "skipped": 0, "message": "Could not parse any profiles from the text"}
+
+    try:
+        items = json.loads(match.group())
+    except json.JSONDecodeError:
+        return {"added": 0, "skipped": 0, "message": "JSON parse error"}
+
+    added, skipped = 0, 0
+    for item in items:
+        name = (item.get("name") or "").strip()
+        if not name:
+            skipped += 1
+            continue
+        exists = await db.execute(
+            sa.text("SELECT id FROM journalists WHERE name = :name"), {"name": name}
+        )
+        if exists.first():
+            skipped += 1
+            continue
+        embed_text = f"{name} {' '.join(item.get('publications', []))} {item.get('bio', '')} {' '.join(item.get('beats', []))}"
+        embedding = await embed(embed_text)
+        embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+        try:
+            await db.execute(
+                sa.text("""
+                    INSERT INTO journalists
+                        (id, name, bio, publications, beats, email, social_links, location, country, notes)
+                    VALUES
+                        (gen_random_uuid(), :name, :bio, CAST(:publications AS jsonb), CAST(:beats AS jsonb),
+                         :email, CAST(:social_links AS jsonb), :location, :country, :notes)
+                    ON CONFLICT (name) DO NOTHING
+                """),
+                {
+                    "name": name,
+                    "bio": item.get("bio"),
+                    "publications": json.dumps(item.get("publications") or []),
+                    "beats": json.dumps(item.get("beats") or []),
+                    "email": item.get("email"),
+                    "social_links": json.dumps(item.get("social_links") or {}),
+                    "location": item.get("location"),
+                    "country": item.get("country"),
+                    "notes": item.get("notes"),
+                },
+            )
+            added += 1
+        except Exception as e:
+            logger.error(f"[Journalists/add] Insert failed for {name}: {e}")
+            skipped += 1
+
+    await db.commit()
+    return {"added": added, "skipped": skipped, "message": f"Added {added} journalist(s), skipped {skipped} duplicate(s)"}
 
 
 @router.post("/scan")

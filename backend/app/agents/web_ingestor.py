@@ -548,16 +548,16 @@ class WebIngestor:
                 embedding_str = f"[{','.join(str(x) for x in embedding)}]"
                 await db.execute(text("""
                     INSERT INTO journalists
-                        (name, bio, publications, beats, email, social_links, location, country, notes)
+                        (id, name, bio, publications, beats, email, social_links, location, country, notes)
                     VALUES
-                        (:name, :bio, :publications, :beats, :email,
-                         CAST(:social_links AS jsonb), :location, :country, :notes)
+                        (gen_random_uuid(), :name, :bio, CAST(:publications AS jsonb), CAST(:beats AS jsonb),
+                         :email, CAST(:social_links AS jsonb), :location, :country, :notes)
                     ON CONFLICT (name) DO NOTHING
                 """), {
                     "name": name,
                     "bio": item.get("bio"),
-                    "publications": item.get("publications", []),
-                    "beats": item.get("beats", []),
+                    "publications": _json.dumps(item.get("publications") or []),
+                    "beats": _json.dumps(item.get("beats") or []),
                     "email": item.get("email"),
                     "social_links": _json.dumps(item.get("social_links") or {}),
                     "location": item.get("location"),

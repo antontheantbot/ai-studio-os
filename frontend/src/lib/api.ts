@@ -114,6 +114,11 @@ export const getJournalists = (q?: string) =>
   request<Journalist[]>(`/journalists/${q ? `?q=${encodeURIComponent(q)}` : ""}`);
 export const scanJournalists = () =>
   request<{ status: string }>("/journalists/scan", { method: "POST" });
+export const addJournalistsFromText = (text: string) =>
+  request<{ added: number; skipped: number; message: string }>("/journalists/add", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
 export const chat = (message: string, history: ChatMessage[]) =>
