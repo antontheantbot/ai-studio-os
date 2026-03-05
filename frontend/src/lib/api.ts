@@ -11,7 +11,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 // ── Opportunities ────────────────────────────────────────────────────────────
 export const getOpportunities = (q?: string) =>
-  request<Opportunity[]>(`/opportunities/${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+  request<Opportunity[]>(`/opportunities/?upcoming_only=true${q ? `&q=${encodeURIComponent(q)}` : ""}&limit=100`);
 
 export const triggerOpportunityScan = () =>
   request<{ task_id: string }>("/opportunities/scan", { method: "POST" });

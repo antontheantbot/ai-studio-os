@@ -25,8 +25,11 @@ export default function OpportunitiesPage() {
     setTimeout(() => { setScanning(false); mutate(); }, 3000);
   };
 
+  const today = new Date().toISOString().split("T")[0];
   const items = (data ?? []).filter(
-    (o: Opportunity) => filter === "all" || o.category === filter
+    (o: Opportunity) =>
+      (filter === "all" || o.category === filter) &&
+      (!o.deadline || o.deadline >= today)
   );
 
   return (
