@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.db.session import engine
 from app.db.base import Base
+import app.models  # noqa: F401 — registers all ORM models with Base.metadata
 from app.api.routes import router
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 async def _daily_scan_loop():
     """Run opportunity and grant scans once per day."""
-    # Wait 60s after startup before the first scan so the DB is ready
     await asyncio.sleep(60)
     while True:
         try:
@@ -30,14 +30,30 @@ async def _daily_scan_loop():
         await asyncio.sleep(24 * 60 * 60)
 
 
+async def _weekly_market_scan_loop():
+    """Scan art market and generate creative brief once per week."""
+    await asyncio.sleep(90)  # stagger after daily scan starts
+    while True:
+        try:
+            logger.info("[Scheduler] Starting weekly market brief scan")
+            from app.api.routes.briefs import _scan_and_save
+            await _scan_and_save()
+            logger.info("[Scheduler] Weekly market brief complete")
+        except Exception as e:
+            logger.error(f"[Scheduler] Weekly market brief error: {e}")
+        await asyncio.sleep(7 * 24 * 60 * 60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create tables on startup (use Alembic migrations in production)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     task = asyncio.create_task(_daily_scan_loop())
+    market_task = asyncio.create_task(_weekly_market_scan_loop())
     yield
     task.cancel()
+    market_task.cancel()
     await engine.dispose()
 
 

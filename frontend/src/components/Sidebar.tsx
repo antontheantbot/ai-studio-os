@@ -16,6 +16,7 @@ import {
   Frame,
   Landmark,
   CalendarDays,
+  TrendingUp,
 } from "lucide-react";
 
 const NAV = [
@@ -29,6 +30,7 @@ const NAV = [
   { href: "/collectors",    label: "Collectors",    icon: Users },
   { href: "/curators",      label: "Curators",      icon: GraduationCap },
   { href: "/press",         label: "Press",         icon: Newspaper },
+  { href: "/briefs",        label: "Trend-to-Brief", icon: TrendingUp },
   { href: "/proposals",     label: "Proposals",     icon: FileText },
   { href: "/knowledge",     label: "Knowledge",     icon: BookOpen },
   { href: "/chat",          label: "Chat",          icon: MessageSquare },

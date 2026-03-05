@@ -102,6 +102,11 @@ export const createExhibition = (body: Omit<Exhibition, "id" | "created_at">) =>
     body: JSON.stringify(body),
   });
 
+// ── Market Briefs ─────────────────────────────────────────────────────────────
+export const getBriefs = () => request<MarketBrief[]>("/briefs/");
+export const getLatestBrief = () => request<MarketBrief>("/briefs/latest");
+export const scanMarket = () => request<{ status: string }>("/briefs/scan", { method: "POST" });
+
 // ── Chat ─────────────────────────────────────────────────────────────────────
 export const chat = (message: string, history: ChatMessage[]) =>
   request<{ response: string; sources: string[] }>("/chat/", {
@@ -262,4 +267,17 @@ export interface Exhibition {
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+export interface MarketBrief {
+  id: string;
+  week_of: string;
+  title: string;
+  signals: { signal: string; source: string; url: string; category: string; strength: string }[];
+  trends: { category: string; signal: string; strength: string }[];
+  top_artists: string[];
+  top_mediums: string[];
+  brief: string;
+  sources: string[];
+  created_at: string;
 }
