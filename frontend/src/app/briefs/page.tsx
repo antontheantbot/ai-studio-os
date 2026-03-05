@@ -35,19 +35,25 @@ export default function BriefsPage() {
   const handleScan = async () => {
     setScanning(true);
     setStepIdx(0);
-    const prevId = latest?.id;
 
     await scanMarket();
+
+    const prevUpdatedAt = latest?.updated_at ?? latest?.created_at ?? null;
 
     // Cycle through status messages every 20s
     stepRef.current = setInterval(() => {
       setStepIdx(i => Math.min(i + 1, SCAN_STEPS.length - 1));
     }, 20000);
 
-    // Poll every 10s until a new brief appears
+    // Poll every 10s until brief is updated (compare updated_at, fall back to id)
     pollRef.current = setInterval(async () => {
       const fresh = await getLatestBrief();
-      if (fresh?.id && fresh.id !== prevId && fresh.brief) {
+      const freshTs = fresh?.updated_at ?? fresh?.created_at ?? null;
+      const isNew = fresh?.brief && (
+        fresh.id !== latest?.id ||
+        (freshTs && freshTs !== prevUpdatedAt)
+      );
+      if (isNew) {
         clearInterval(pollRef.current!);
         clearInterval(stepRef.current!);
         setScanning(false);

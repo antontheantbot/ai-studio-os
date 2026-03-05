@@ -79,7 +79,8 @@ async def _scan_and_save():
                         top_artists = EXCLUDED.top_artists,
                         top_mediums = EXCLUDED.top_mediums,
                         brief = EXCLUDED.brief,
-                        sources = EXCLUDED.sources
+                        sources = EXCLUDED.sources,
+                        updated_at = now()
                 """),
                 {
                     "week_of": week_of,

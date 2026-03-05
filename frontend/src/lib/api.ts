@@ -280,4 +280,5 @@ export interface MarketBrief {
   brief: string;
   sources: string[];
   created_at: string;
+  updated_at: string;
 }
