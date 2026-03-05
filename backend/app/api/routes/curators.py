@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 import sqlalchemy as sa
 from pydantic import BaseModel
@@ -71,3 +71,11 @@ async def create_curator(c: CuratorCreate, db: AsyncSession = Depends(get_db)):
     )
     await db.commit()
     return dict(result.first()._mapping)
+
+
+@router.post("/scan")
+async def scan(background_tasks: BackgroundTasks):
+    """Trigger a live web scan for new curators using Tavily."""
+    from app.agents.web_ingestor import scan_curators
+    background_tasks.add_task(scan_curators)
+    return {"status": "scanning", "category": "curators", "message": "Web scan started"}

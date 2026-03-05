@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 
 from app.api.routes import (
     opportunities,
@@ -31,3 +31,18 @@ router.include_router(artists.router, prefix="/artists", tags=["artists"])
 router.include_router(institutions.router, prefix="/institutions", tags=["institutions"])
 router.include_router(exhibitions.router, prefix="/exhibitions", tags=["exhibitions"])
 router.include_router(artworks.router, prefix="/artworks", tags=["artworks"])
+
+
+@router.post("/scan/all", tags=["scan"])
+async def scan_everything(background_tasks: BackgroundTasks):
+    """Trigger a full web scan across all categories (opportunities, architecture,
+    collectors, curators, press, knowledge) using Tavily."""
+    from app.agents.opportunity_scanner import scan_with_scoring
+    from app.agents.web_ingestor import run_all
+    background_tasks.add_task(scan_with_scoring)
+    background_tasks.add_task(run_all)
+    return {
+        "status": "scanning",
+        "categories": ["opportunities", "architecture", "collectors", "curators", "press", "knowledge"],
+        "message": "Full web scan started — check back in ~5 minutes",
+    }

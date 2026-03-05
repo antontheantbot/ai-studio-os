@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 import sqlalchemy as sa
 from pydantic import BaseModel
@@ -70,3 +70,11 @@ async def create_collector(c: CollectorCreate, db: AsyncSession = Depends(get_db
     )
     await db.commit()
     return dict(result.first()._mapping)
+
+
+@router.post("/scan")
+async def scan(background_tasks: BackgroundTasks):
+    """Trigger a live web scan for new collectors using Tavily."""
+    from app.agents.web_ingestor import scan_collectors
+    background_tasks.add_task(scan_collectors)
+    return {"status": "scanning", "category": "collectors", "message": "Web scan started"}

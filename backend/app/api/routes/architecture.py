@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.services.search import vector_search
@@ -24,3 +24,11 @@ async def trigger_scout():
     from workers.celery_app import celery_app
     task = celery_app.send_task("tasks.scout_architecture")
     return {"task_id": task.id, "status": "queued"}
+
+
+@router.post("/scan")
+async def scan(background_tasks: BackgroundTasks):
+    """Trigger a live web scan for new architecture using Tavily."""
+    from app.agents.web_ingestor import scan_architecture
+    background_tasks.add_task(scan_architecture)
+    return {"status": "scanning", "category": "architecture", "message": "Web scan started"}

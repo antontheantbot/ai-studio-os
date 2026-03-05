@@ -1,5 +1,5 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 import sqlalchemy as sa
 from pydantic import BaseModel
@@ -67,3 +67,11 @@ async def create_press(p: PressCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     row = result.first()
     return dict(row._mapping) if row else {"status": "already exists"}
+
+
+@router.post("/scan")
+async def scan(background_tasks: BackgroundTasks):
+    """Trigger a live web scan for new press using Tavily."""
+    from app.agents.web_ingestor import scan_press
+    background_tasks.add_task(scan_press)
+    return {"status": "scanning", "category": "press", "message": "Web scan started"}

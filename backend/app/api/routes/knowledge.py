@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, UploadFile, File
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from app.db.session import get_db
@@ -56,3 +56,11 @@ async def list_knowledge(
         {"limit": limit},
     )
     return [dict(r._mapping) for r in result]
+
+
+@router.post("/scan")
+async def scan(background_tasks: BackgroundTasks):
+    """Trigger a live web scan for new knowledge using Tavily."""
+    from app.agents.web_ingestor import scan_knowledge
+    background_tasks.add_task(scan_knowledge)
+    return {"status": "scanning", "category": "knowledge", "message": "Web scan started"}
