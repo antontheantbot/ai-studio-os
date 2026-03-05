@@ -73,12 +73,20 @@ async def create_opportunity(opp: OpportunityCreate, db: AsyncSession = Depends(
 
 
 async def _run_all_scanners():
-    import asyncio
+    import logging
+    logger = logging.getLogger(__name__)
     from app.agents.opportunity_scanner import scan_with_scoring
     from app.agents.tavily_scanner import run as tavily_run
-    results = await asyncio.gather(scan_with_scoring(), tavily_run(), return_exceptions=True)
-    logger = __import__("logging").getLogger(__name__)
-    logger.info(f"[Scan] URL scanner: {results[0]}, Tavily: {results[1]}")
+    try:
+        url_count = await scan_with_scoring()
+        logger.info(f"[Scan] URL scanner done: {url_count} saved")
+    except Exception as e:
+        logger.error(f"[Scan] URL scanner failed: {e}")
+    try:
+        tavily_count = await tavily_run()
+        logger.info(f"[Scan] Tavily scanner done: {tavily_count} saved")
+    except Exception as e:
+        logger.error(f"[Scan] Tavily scanner failed: {e}")
 
 
 @router.post("/scan")

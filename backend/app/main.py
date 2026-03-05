@@ -22,7 +22,8 @@ async def _daily_scan_loop():
             logger.info("[Scheduler] Starting daily opportunity + grant scan")
             from app.agents.opportunity_scanner import scan_with_scoring
             from app.agents.tavily_scanner import run as tavily_run
-            await asyncio.gather(scan_with_scoring(), tavily_run(), return_exceptions=True)
+            await scan_with_scoring()
+            await tavily_run()
             logger.info("[Scheduler] Daily scan complete")
         except Exception as e:
             logger.error(f"[Scheduler] Daily scan error: {e}")
