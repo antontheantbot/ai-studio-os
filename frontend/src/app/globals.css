@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #0a0a0a;
+  color: #f0f0f0;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track { background: #111; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
+
+.tag {
+  @apply inline-block px-2 py-0.5 rounded text-xs bg-studio-border text-studio-text-muted uppercase tracking-wider;
+}
+
+.tag-accent {
+  @apply inline-block px-2 py-0.5 rounded text-xs bg-studio-accent text-black font-medium uppercase tracking-wider;
+}
+
+.card {
+  @apply bg-studio-surface border border-studio-border rounded-lg p-4;
+}
+
+.btn {
+  @apply px-4 py-2 rounded text-sm font-medium transition-colors cursor-pointer;
+}
+
+.btn-primary {
+  @apply btn bg-studio-accent text-black hover:bg-studio-accent-dim;
+}
+
+.btn-ghost {
+  @apply btn border border-studio-border text-studio-text-muted hover:border-studio-muted hover:text-studio-text;
+}
+
+input, textarea {
+  @apply bg-studio-surface border border-studio-border rounded px-3 py-2 text-studio-text placeholder-studio-text-muted outline-none focus:border-studio-accent transition-colors w-full;
+}
