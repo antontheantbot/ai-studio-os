@@ -13,6 +13,7 @@ from app.api.routes import (
     artworks,
     institutions,
     exhibitions,
+    strategy,
 )
 
 router = APIRouter()
@@ -29,3 +30,4 @@ router.include_router(artists.router, prefix="/artists", tags=["Artists"])
 router.include_router(artworks.router, prefix="/artworks", tags=["Artworks"])
 router.include_router(institutions.router, prefix="/institutions", tags=["Institutions"])
 router.include_router(exhibitions.router, prefix="/exhibitions", tags=["Exhibitions"])
+router.include_router(strategy.router, prefix="/strategy", tags=["Strategy"])
