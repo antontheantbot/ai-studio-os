@@ -109,6 +109,12 @@ export const getLatestColorTrends = () => request<ColorSizeTrend>("/briefs/color
 export const scanColorTrends = () => request<{ status: string }>("/briefs/color-trends/scan", { method: "POST" });
 export const scanMarket = () => request<{ status: string }>("/briefs/scan", { method: "POST" });
 
+// ── Journalists ───────────────────────────────────────────────────────────────
+export const getJournalists = (q?: string) =>
+  request<Journalist[]>(`/journalists/${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+export const scanJournalists = () =>
+  request<{ status: string }>("/journalists/scan", { method: "POST" });
+
 // ── Chat ─────────────────────────────────────────────────────────────────────
 export const chat = (message: string, history: ChatMessage[]) =>
   request<{ response: string; sources: string[] }>("/chat/", {
@@ -283,6 +289,20 @@ export interface MarketBrief {
   sources: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface Journalist {
+  id: string;
+  name: string;
+  bio: string;
+  publications: string[];
+  beats: string[];
+  email: string | null;
+  social_links: { twitter?: string; instagram?: string; linkedin?: string; website?: string };
+  location: string | null;
+  country: string | null;
+  notes: string | null;
+  created_at: string;
 }
 
 export interface ColorSizeTrend {

@@ -58,6 +58,17 @@ PRESS_QUERIES = [
     "digital artist interview profile 2026",
 ]
 
+JOURNALIST_QUERIES = [
+    "art critic journalist writer Artforum Frieze contact email",
+    "contemporary art journalist writer profile publication 2026",
+    "architecture critic journalist writer publication contact",
+    "culture journalist writer art photography publication email",
+    "art writer freelance journalist New York Times Guardian Artsy",
+    "photography critic journalist publication portfolio contact",
+    "art market journalist writer contact publication",
+    "contemporary art blogger writer social media publication",
+]
+
 KNOWLEDGE_QUERIES = [
     "how to write artist residency proposal digital art",
     "art world guide digital installation artist career",
@@ -135,6 +146,23 @@ Return a JSON array with fields:
 - mentioned_artists (array of strings, artist names mentioned)
 
 Only include real articles from identifiable publications. Return [] if none found.
+
+Search results:
+{results}"""
+
+JOURNALIST_PROMPT = """From these search results, extract profiles of journalists, critics, and writers who cover contemporary art, culture, photography, or architecture.
+Return a JSON array with fields:
+- name (string, full name)
+- bio (string, 2-3 sentences about their focus and work)
+- publications (array of strings, publications or outlets they write for e.g. ["Artforum", "The Guardian", "Frieze"])
+- beats (array of strings, topics they cover e.g. ["contemporary art", "architecture", "photography", "culture"])
+- email (string, publicly listed email address or null — only include if clearly public)
+- social_links (object with any of: twitter, instagram, linkedin, website — use public profile URLs)
+- location (string, city or null)
+- country (string or null)
+- notes (string, any useful context e.g. "covers emerging artists" or null)
+
+Only include real, named journalists with verifiable work. Prioritise those who cover art, culture, architecture or photography. Return [] if none found.
 
 Search results:
 {results}"""
@@ -484,6 +512,63 @@ class WebIngestor:
             await db.commit()
         return saved
 
+    # ─── Journalists ─────────────────────────────────────────────────────────
+
+    async def scan_journalists(self) -> int:
+        import json as _json
+        total = 0
+        seen_names: set = set()
+        for query in JOURNALIST_QUERIES:
+            try:
+                results_text = await self._search(query)
+                items = await self._extract(JOURNALIST_PROMPT, results_text)
+                count = await self._save_journalists(items, seen_names)
+                total += count
+                logger.info(f"[WebIngestor/Journalists] '{query}': {count} saved")
+            except Exception as e:
+                logger.error(f"[WebIngestor/Journalists] Failed '{query}': {e}")
+        return total
+
+    async def _save_journalists(self, items: list[dict], seen: set) -> int:
+        import json as _json
+        saved = 0
+        async with AsyncSessionLocal() as db:
+            for item in items:
+                name = item.get("name", "").strip()
+                if not name or name in seen:
+                    continue
+                exists = await db.execute(
+                    text("SELECT id FROM journalists WHERE name = :name"), {"name": name}
+                )
+                if exists.first():
+                    seen.add(name)
+                    continue
+                embed_text = f"{name} {' '.join(item.get('publications', []))} {item.get('bio', '')} {' '.join(item.get('beats', []))}"
+                embedding = await embed(embed_text)
+                embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+                await db.execute(text("""
+                    INSERT INTO journalists
+                        (name, bio, publications, beats, email, social_links, location, country, notes)
+                    VALUES
+                        (:name, :bio, :publications, :beats, :email,
+                         CAST(:social_links AS jsonb), :location, :country, :notes)
+                    ON CONFLICT (name) DO NOTHING
+                """), {
+                    "name": name,
+                    "bio": item.get("bio"),
+                    "publications": item.get("publications", []),
+                    "beats": item.get("beats", []),
+                    "email": item.get("email"),
+                    "social_links": _json.dumps(item.get("social_links") or {}),
+                    "location": item.get("location"),
+                    "country": item.get("country"),
+                    "notes": item.get("notes"),
+                })
+                saved += 1
+                seen.add(name)
+            await db.commit()
+        return saved
+
     # ─── Run all ─────────────────────────────────────────────────────────────
 
     async def run_all(self) -> dict:
@@ -494,9 +579,10 @@ class WebIngestor:
             self.scan_curators(),
             self.scan_press(),
             self.scan_knowledge(),
+            self.scan_journalists(),
             return_exceptions=True,
         )
-        categories = ["architecture", "collectors", "curators", "press", "knowledge"]
+        categories = ["architecture", "collectors", "curators", "press", "knowledge", "journalists"]
         summary = {}
         for cat, res in zip(categories, results):
             if isinstance(res, Exception):
@@ -533,3 +619,7 @@ async def scan_press() -> int:
 
 async def scan_knowledge() -> int:
     return await _ingestor.scan_knowledge()
+
+
+async def scan_journalists() -> int:
+    return await _ingestor.scan_journalists()
