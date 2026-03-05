@@ -1,26 +1,60 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import useSWR from "swr";
 import { TrendingUp, RefreshCw, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import EmptyState from "@/components/EmptyState";
 import { getBriefs, getLatestBrief, scanMarket, type MarketBrief } from "@/lib/api";
 
+const SCAN_STEPS = [
+  "Searching Christie's auction results...",
+  "Searching Sotheby's top lots...",
+  "Scanning Art Basel highlights...",
+  "Checking Pace Gallery exhibitions...",
+  "Scanning Artsy market data...",
+  "Extracting market signals...",
+  "Generating creative brief...",
+  "Saving brief...",
+];
+
 export default function BriefsPage() {
   const [scanning, setScanning] = useState(false);
+  const [stepIdx, setStepIdx] = useState(0);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stepRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: latest, mutate: mutateLatest } = useSWR("briefs/latest", getLatestBrief);
   const { data: briefs, isLoading, mutate: mutateBriefs } = useSWR("briefs", getBriefs);
 
+  useEffect(() => () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (stepRef.current) clearInterval(stepRef.current);
+  }, []);
+
   const handleScan = async () => {
     setScanning(true);
+    setStepIdx(0);
+    const prevId = latest?.id;
+
     await scanMarket();
-    setTimeout(() => {
-      setScanning(false);
-      mutateLatest();
-      mutateBriefs();
-    }, 5000);
+
+    // Cycle through status messages every 20s
+    stepRef.current = setInterval(() => {
+      setStepIdx(i => Math.min(i + 1, SCAN_STEPS.length - 1));
+    }, 20000);
+
+    // Poll every 10s until a new brief appears
+    pollRef.current = setInterval(async () => {
+      const fresh = await getLatestBrief();
+      if (fresh?.id && fresh.id !== prevId && fresh.brief) {
+        clearInterval(pollRef.current!);
+        clearInterval(stepRef.current!);
+        setScanning(false);
+        mutateLatest();
+        mutateBriefs();
+      }
+    }, 10000);
   };
 
   const toggle = (id: string) => setExpanded(e => e === id ? null : id);
@@ -33,10 +67,30 @@ export default function BriefsPage() {
         actions={
           <button onClick={handleScan} disabled={scanning} className="btn-primary flex items-center gap-2">
             <RefreshCw size={13} className={scanning ? "animate-spin" : ""} />
-            {scanning ? "Scanning Market..." : "Scan & Generate Brief"}
+            {scanning ? "Scanning..." : "Scan & Generate Brief"}
           </button>
         }
       />
+
+      {/* Scanning progress */}
+      {scanning && (
+        <div className="card mb-6 border-studio-accent/20">
+          <div className="flex items-center gap-3">
+            <RefreshCw size={13} className="animate-spin text-studio-accent flex-shrink-0" />
+            <div>
+              <p className="text-xs text-studio-text">{SCAN_STEPS[stepIdx]}</p>
+              <p className="text-xs text-studio-text-muted mt-0.5">
+                This takes 2–4 minutes — scanning Christie's, Sotheby's, Art Basel, Pace & Artsy
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex gap-1">
+            {SCAN_STEPS.map((_, i) => (
+              <div key={i} className={`h-0.5 flex-1 rounded-full transition-colors ${i <= stepIdx ? "bg-studio-accent" : "bg-studio-border"}`} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Latest brief — hero display */}
       {latest && latest.brief && (
