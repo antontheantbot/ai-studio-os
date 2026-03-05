@@ -3,6 +3,7 @@ Tavily Web Search Scanner
 Searches the live web for art opportunities across all contemporary art forms.
 Runs queries per category and saves new results to the database.
 """
+import asyncio
 import json
 import logging
 import re
@@ -100,6 +101,7 @@ class TavilyScanner:
                 logger.info(f"[TavilyScanner] '{query}' [{category}]: {count} saved")
             except Exception as e:
                 logger.error(f"[TavilyScanner] Failed '{query}': {e}")
+            await asyncio.sleep(2)
 
         logger.info(f"[TavilyScanner] Total saved: {total}")
         return total

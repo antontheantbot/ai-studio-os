@@ -5,6 +5,7 @@ Uses Tavily for live web search + httpx/BeautifulSoup for targeted scraping.
 Covers digital art, new media, photography, painting, printmaking, and
 all forms of contemporary art.
 """
+import asyncio
 import json
 import logging
 import re
@@ -39,6 +40,9 @@ SOURCES = [
     {"url": "https://www.artaward.org", "category": "contest", "name": "Art Award"},
     {"url": "https://www.1x.com/contest", "category": "contest", "name": "1x Photography Contest"},
     {"url": "https://www.creativeboom.com/competitions/", "category": "contest", "name": "Creative Boom"},
+    {"url": "https://www.photoawards.com", "category": "contest", "name": "IPA Photo Awards"},
+    {"url": "https://www.worldpressphoto.org/apply", "category": "contest", "name": "World Press Photo"},
+    {"url": "https://www.artconnect.com/opportunities?category=competition", "category": "contest", "name": "ArtConnect Competitions"},
     # Open calls — contemporary art (broad)
     {"url": "https://www.artsy.net/articles?tag=open-calls", "category": "open_call", "name": "Artsy Open Calls"},
     {"url": "https://www.e-flux.com/announcements/", "category": "open_call", "name": "e-flux Announcements"},
@@ -229,6 +233,7 @@ class OpportunityScanner:
                 logger.info(f"[OpportunityScanner] Tavily '{query}': {len(response.get('results', []))} results")
             except Exception as e:
                 logger.error(f"[OpportunityScanner] Tavily query failed '{query}': {e}")
+            await asyncio.sleep(2)
 
         if not all_results:
             return 0
