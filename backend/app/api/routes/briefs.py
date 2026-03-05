@@ -68,8 +68,8 @@ async def _scan_and_save():
         async with AsyncSessionLocal() as db:
             await db.execute(
                 text("""
-                    INSERT INTO market_briefs (week_of, title, signals, trends, top_artists, top_mediums, brief, sources)
-                    VALUES (:week_of, :title, CAST(:signals AS jsonb), CAST(:trends AS jsonb),
+                    INSERT INTO market_briefs (id, week_of, title, signals, trends, top_artists, top_mediums, brief, sources)
+                    VALUES (gen_random_uuid(), :week_of, :title, CAST(:signals AS jsonb), CAST(:trends AS jsonb),
                             CAST(:top_artists AS jsonb), CAST(:top_mediums AS jsonb),
                             :brief, CAST(:sources AS jsonb))
                     ON CONFLICT (week_of) DO UPDATE SET
