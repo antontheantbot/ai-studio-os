@@ -9,13 +9,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Playwright system dependencies
 RUN pip install --no-cache-dir playwright && playwright install --with-deps chromium
 
-COPY ../backend/requirements.txt /tmp/requirements.txt
+COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 
-# Also install scraper dependencies
 RUN pip install --no-cache-dir playwright beautifulsoup4
 
-COPY . /app/workers
-COPY ../backend /app/backend
+COPY workers /app/workers
+COPY backend /app/backend
 
 ENV PYTHONPATH=/app:/app/backend

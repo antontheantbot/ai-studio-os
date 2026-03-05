@@ -58,8 +58,8 @@ services:
   # ── Celery Worker ─────────────────────────────────────────────────────────
   worker:
     build:
-      context: ./workers
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: workers/Dockerfile
     restart: unless-stopped
     env_file: .env
     volumes:
@@ -75,8 +75,8 @@ services:
   # ── Celery Beat (scheduler) ───────────────────────────────────────────────
   beat:
     build:
-      context: ./workers
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: workers/Dockerfile
     restart: unless-stopped
     env_file: .env
     volumes:
