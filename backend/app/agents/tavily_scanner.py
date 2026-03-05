@@ -101,7 +101,7 @@ class TavilyScanner:
                 logger.info(f"[TavilyScanner] '{query}' [{category}]: {count} saved")
             except Exception as e:
                 logger.error(f"[TavilyScanner] Failed '{query}': {e}")
-            await asyncio.sleep(2)
+            await asyncio.sleep(5)
 
         logger.info(f"[TavilyScanner] Total saved: {total}")
         return total

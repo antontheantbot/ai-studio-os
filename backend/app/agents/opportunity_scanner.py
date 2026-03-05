@@ -233,7 +233,7 @@ class OpportunityScanner:
                 logger.info(f"[OpportunityScanner] Tavily '{query}': {len(response.get('results', []))} results")
             except Exception as e:
                 logger.error(f"[OpportunityScanner] Tavily query failed '{query}': {e}")
-            await asyncio.sleep(2)
+            await asyncio.sleep(5)
 
         if not all_results:
             return 0
