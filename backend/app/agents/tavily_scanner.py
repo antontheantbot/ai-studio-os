@@ -20,14 +20,23 @@ logger = logging.getLogger(__name__)
 SEARCH_QUERIES = [
     "digital art open call 2026",
     "new media art residency 2026",
-    "digital art commission grant 2026",
     "interactive installation open call 2026",
     "AI art prize award 2026",
     "generative art festival open call 2026",
     "immersive art commission 2026",
     "media art residency application 2026",
-    "technology art grant opportunity 2026",
     "video art open call deadline 2026",
+]
+
+GRANT_QUERIES = [
+    "digital art grant funding 2026 application",
+    "contemporary art grant open 2026",
+    "new media art grant award 2026",
+    "artist grant technology art 2026",
+    "AI art research grant 2026",
+    "public art grant commission 2026 apply",
+    "experimental art grant foundation 2026",
+    "emerging artist grant digital 2026",
 ]
 
 EXTRACT_PROMPT = """From the following search results about art opportunities, extract structured data.
@@ -57,7 +66,7 @@ class TavilyScanner:
     async def run(self) -> int:
         """Run all search queries and save new opportunities."""
         total_saved = 0
-        seen_urls = set()
+        seen_urls: set = set()
 
         for query in SEARCH_QUERIES:
             try:
@@ -68,10 +77,19 @@ class TavilyScanner:
             except Exception as e:
                 logger.error(f"[TavilyScanner] Failed query '{query}': {e}")
 
+        for query in GRANT_QUERIES:
+            try:
+                count, urls = await self._search_and_save(query, seen_urls, force_category="grant")
+                seen_urls.update(urls)
+                total_saved += count
+                logger.info(f"[TavilyScanner] '{query}': {count} saved")
+            except Exception as e:
+                logger.error(f"[TavilyScanner] Failed grant query '{query}': {e}")
+
         logger.info(f"[TavilyScanner] Total saved: {total_saved}")
         return total_saved
 
-    async def _search_and_save(self, query: str, seen_urls: set) -> tuple[int, list]:
+    async def _search_and_save(self, query: str, seen_urls: set, force_category: str | None = None) -> tuple[int, list]:
         response = await self.client.search(
             query=query,
             search_depth="advanced",
@@ -102,13 +120,16 @@ class TavilyScanner:
             return 0, []
 
         # Infer category from query
-        category = "open_call"
-        if "residency" in query:
+        if force_category:
+            category = force_category
+        elif "residency" in query:
             category = "residency"
-        elif "commission" in query or "grant" in query:
+        elif "commission" in query:
             category = "commission"
         elif "festival" in query or "prize" in query or "award" in query:
             category = "festival"
+        else:
+            category = "open_call"
 
         saved_urls = []
         saved = await self._save_items(items, category, seen_urls, saved_urls)
