@@ -72,9 +72,17 @@ async def create_opportunity(opp: OpportunityCreate, db: AsyncSession = Depends(
     return dict(row._mapping) if row else {"status": "already exists"}
 
 
+async def _run_all_scanners():
+    import asyncio
+    from app.agents.opportunity_scanner import scan_with_scoring
+    from app.agents.tavily_scanner import run as tavily_run
+    results = await asyncio.gather(scan_with_scoring(), tavily_run(), return_exceptions=True)
+    logger = __import__("logging").getLogger(__name__)
+    logger.info(f"[Scan] URL scanner: {results[0]}, Tavily: {results[1]}")
+
+
 @router.post("/scan")
 async def trigger_scan(background_tasks: BackgroundTasks):
-    """Trigger a live scan of all opportunity sources in the background."""
-    from app.agents.opportunity_scanner import scan_with_scoring
-    background_tasks.add_task(scan_with_scoring)
-    return {"status": "scanning", "sources": 11, "message": "Scan started — check back in ~2 minutes"}
+    """Trigger a live web scan — scrapes known sources and searches the open web."""
+    background_tasks.add_task(_run_all_scanners)
+    return {"status": "scanning", "message": "Scanning known sources + searching the web — check back in ~3 minutes"}

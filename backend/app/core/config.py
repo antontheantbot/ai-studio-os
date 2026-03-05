@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIM: int = 1536
 
+    # Tavily
+    TAVILY_API_KEY: str = ""
+
     # Telegram
     TELEGRAM_BOT_TOKEN: str = ""
 
