@@ -20,9 +20,9 @@ async def vector_search(
 
     sql = text(f"""
         SELECT {return_cols},
-               1 - ({embedding_col} <=> :embedding::vector) AS similarity
+               1 - ({embedding_col} <=> CAST(:embedding AS vector)) AS similarity
         FROM {table}
-        ORDER BY {embedding_col} <=> :embedding::vector
+        ORDER BY {embedding_col} <=> CAST(:embedding AS vector)
         LIMIT :limit
     """)
 
