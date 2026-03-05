@@ -1,74 +1,64 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-import sqlalchemy as sa
-
+from sqlalchemy import text
 from app.db.session import get_db
 from app.services.search import vector_search
-from app.services.embeddings import embed
-from pydantic import BaseModel
 
 router = APIRouter()
 
 
-class ArtistCreate(BaseModel):
-    name: str
-    country: str | None = None
-    city: str | None = None
-    bio: str | None = None
-    medium: list[str] = []
-    website: str | None = None
-    instagram: str | None = None
-    represented_by: list[str] = []
-
-
 @router.get("/")
 async def list_artists(
-    q: str | None = Query(None),
-    limit: int = Query(20, le=100),
+    q: str = Query(default=None),
+    limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
 ):
+    """List all artists or search semantically."""
     if q:
-        return await vector_search(db, "artists", q, limit=limit)
+        return await vector_search(db, "artists", q, limit)
+
     result = await db.execute(
-        sa.text("SELECT * FROM artists ORDER BY name LIMIT :limit"),
-        {"limit": limit},
+        text("SELECT * FROM artists ORDER BY created_at DESC LIMIT :limit"),
+        {"limit": limit}
     )
-    return [dict(r._mapping) for r in result]
+    return [dict(row._mapping) for row in result.fetchall()]
 
 
-@router.get("/:artist_id")
+@router.get("/{artist_id}")
 async def get_artist(artist_id: str, db: AsyncSession = Depends(get_db)):
+    """Get a single artist with their relationships."""
     result = await db.execute(
-        sa.text("SELECT * FROM artists WHERE id = :id"),
-        {"id": artist_id},
+        text("SELECT * FROM artists WHERE id = :id"),
+        {"id": artist_id}
     )
-    row = result.first()
-    return dict(row._mapping) if row else {"error": "not found"}
+    artist = result.fetchone()
+    if not artist:
+        return {"error": "Artist not found"}
 
-
-@router.post("/")
-async def create_artist(artist: ArtistCreate, db: AsyncSession = Depends(get_db)):
-    embed_text = f"{artist.name} {' '.join(artist.medium)} {artist.bio or ''}"
-    embedding = await embed(embed_text)
-    embedding_str = f"[{','.join(str(x) for x in embedding)}]"
-
-    result = await db.execute(
-        sa.text("""
-            INSERT INTO artists (name, country, city, bio, medium, website, instagram, represented_by, embedding)
-            VALUES (:name, :country, :city, :bio, :medium, :website, :instagram, :represented_by, CAST(:embedding AS vector))
-            RETURNING id, name, created_at
+    # Get collector relationships
+    collectors = await db.execute(
+        text("""
+            SELECT c.name, car.relationship_type, car.confidence
+            FROM collector_artist_relations car
+            JOIN collectors c ON c.id = car.collector_id
+            WHERE car.artist_id = :id
         """),
-        {
-            "name": artist.name,
-            "country": artist.country,
-            "city": artist.city,
-            "bio": artist.bio,
-            "medium": artist.medium,
-            "website": artist.website,
-            "instagram": artist.instagram,
-            "represented_by": artist.represented_by,
-            "embedding": embedding_str,
-        },
+        {"id": artist_id}
     )
-    await db.commit()
-    return dict(result.first()._mapping)
+
+    # Get institution relationships
+    institutions = await db.execute(
+        text("""
+            SELECT i.name, air.relationship_type, air.year, air.exhibition_title
+            FROM artist_institution_relations air
+            JOIN institutions i ON i.id = air.institution_id
+            WHERE air.artist_id = :id
+        """),
+        {"id": artist_id}
+    )
+
+    return {
+        **dict(artist._mapping),
+        "collectors": [dict(r._mapping) for r in collectors.fetchall()],
+        "institutions": [dict(r._mapping) for r in institutions.fetchall()],
+    }

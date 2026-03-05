@@ -1,82 +1,58 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-import sqlalchemy as sa
-
+from sqlalchemy import text
 from app.db.session import get_db
 from app.services.search import vector_search
-from app.services.embeddings import embed
-from pydantic import BaseModel
 
 router = APIRouter()
 
 
-class InstitutionCreate(BaseModel):
-    name: str
-    city: str | None = None
-    country: str | None = None
-    type: str | None = None
-    website: str | None = None
-    focus_areas: list[str] = []
-    annual_budget: str | None = None
-    digital_art_program: bool = False
-    notes: str | None = None
-
-
 @router.get("/")
 async def list_institutions(
-    q: str | None = Query(None),
-    digital_only: bool = Query(False),
-    limit: int = Query(20, le=100),
+    q: str = Query(default=None),
+    type: str = Query(default=None),
+    digital_only: bool = Query(default=False),
+    limit: int = Query(default=50, le=200),
     db: AsyncSession = Depends(get_db),
 ):
+    """List institutions with optional filters."""
     if q:
-        return await vector_search(db, "institutions", q, limit=limit)
-    where = "WHERE digital_art_program = TRUE" if digital_only else ""
-    result = await db.execute(
-        sa.text(f"SELECT * FROM institutions {where} ORDER BY name LIMIT :limit"),
-        {"limit": limit},
-    )
-    return [dict(r._mapping) for r in result]
+        return await vector_search(db, "institutions", q, limit)
+
+    query = "SELECT * FROM institutions WHERE 1=1"
+    params = {"limit": limit}
+
+    if type:
+        query += " AND type = :type"
+        params["type"] = type
+
+    if digital_only:
+        query += " AND digital_art_program = TRUE"
+
+    query += " ORDER BY created_at DESC LIMIT :limit"
+
+    result = await db.execute(text(query), params)
+    return [dict(row._mapping) for row in result.fetchall()]
 
 
-@router.get("/{institution_id}")
-async def get_institution(institution_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        sa.text("SELECT * FROM institutions WHERE id = :id"),
-        {"id": institution_id},
-    )
-    row = result.first()
-    return dict(row._mapping) if row else {"error": "not found"}
+@router.get("/digital-programs")
+async def get_digital_art_institutions(
+    region: str = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get institutions with active digital art programs."""
+    query = """
+        SELECT name, city, country, type, focus_areas, website
+        FROM institutions
+        WHERE digital_art_program = TRUE
+    """
+    params = {}
 
+    if region:
+        query += " AND (country ILIKE :region OR city ILIKE :region)"
+        params["region"] = f"%{region}%"
 
-@router.post("/")
-async def create_institution(inst: InstitutionCreate, db: AsyncSession = Depends(get_db)):
-    embed_text = f"{inst.name} {inst.type or ''} {' '.join(inst.focus_areas)} {inst.notes or ''}"
-    embedding = await embed(embed_text)
-    embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+    query += " ORDER BY name"
 
-    result = await db.execute(
-        sa.text("""
-            INSERT INTO institutions
-                (name, city, country, type, website, focus_areas,
-                 annual_budget, digital_art_program, notes, embedding)
-            VALUES
-                (:name, :city, :country, :type, :website, :focus_areas,
-                 :annual_budget, :digital_art_program, :notes, CAST(:embedding AS vector))
-            RETURNING id, name, created_at
-        """),
-        {
-            "name": inst.name,
-            "city": inst.city,
-            "country": inst.country,
-            "type": inst.type,
-            "website": inst.website,
-            "focus_areas": inst.focus_areas,
-            "annual_budget": inst.annual_budget,
-            "digital_art_program": inst.digital_art_program,
-            "notes": inst.notes,
-            "embedding": embedding_str,
-        },
-    )
-    await db.commit()
-    return dict(result.first()._mapping)
+    result = await db.execute(text(query), params)
+    return [dict(row._mapping) for row in result.fetchall()]
