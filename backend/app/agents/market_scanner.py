@@ -86,6 +86,39 @@ For each brief include:
 Be specific, direct, and market-aware. Write for a sophisticated digital artist ready to act."""
 
 
+COLOR_SIZE_QUERIES = [
+    "contemporary art 2026 dominant color palette trend paintings photography",
+    "popular art colors collectors buying 2026 gallery exhibition",
+    "contemporary painting color trend earth tones monochrome palette 2026",
+    "most popular artwork canvas size dimensions art market 2026",
+    "artwork format size trend collecting 2026 fair gallery",
+    "photography print size popular format contemporary art 2026",
+    "contemporary art large small format trend collectors 2026",
+]
+
+COLOR_SIZE_PROMPT = """From these art market search results, extract the most popular colors and artwork sizes in contemporary art — paintings, photography, prints, video, and digital works. Exclude sculpture, ceramics, and furniture.
+
+Return a JSON object with:
+- popular_colors: array of up to 8 objects, each with:
+  - name (string, color name e.g. "Raw Umber", "Cobalt Blue", "Warm White")
+  - hex (string, closest approximate hex code e.g. "#7B6555")
+  - trend (string: "rising" | "dominant" | "emerging")
+  - context (string, one sentence e.g. "Dominant in large-format oil at Art Basel 2026")
+- popular_sizes: array of up to 8 objects, each with:
+  - label (string, e.g. "Large Format", "Cabinet Scale", "Square", "Panoramic")
+  - dimensions (string, e.g. "150×200cm", "30×40cm", "variable")
+  - medium (string, e.g. "Oil on canvas", "C-print", "Inkjet on paper")
+  - trend (string: "rising" | "dominant" | "emerging")
+  - context (string, one sentence on why this format is gaining traction)
+- summary (string, 2–3 sentences summarising overall color and size trends)
+- sources: array of source URLs referenced
+
+Return {{ "popular_colors": [], "popular_sizes": [], "summary": "", "sources": [] }} if insufficient data.
+
+Search results:
+{results}"""
+
+
 class MarketScanner:
     def __init__(self):
         self.client = AsyncTavilyClient(api_key=settings.TAVILY_API_KEY)
@@ -145,6 +178,45 @@ class MarketScanner:
             week_of=week_str,
         ))
 
+    async def scan_color_size(self) -> dict:
+        """Scan for popular colors and artwork sizes in contemporary art."""
+        all_results = []
+        seen_urls: set = set()
+
+        for query in COLOR_SIZE_QUERIES:
+            try:
+                response = await self.client.search(
+                    query=query,
+                    search_depth="advanced",
+                    max_results=5,
+                    include_answer=False,
+                )
+                for r in response.get("results", []):
+                    if r.get("url") not in seen_urls:
+                        all_results.append(r)
+                        seen_urls.add(r.get("url", ""))
+                logger.info(f"[ColorSizeScanner] '{query}': {len(response.get('results', []))} results")
+            except Exception as e:
+                logger.error(f"[ColorSizeScanner] Query failed '{query}': {e}")
+
+        if not all_results:
+            return {"popular_colors": [], "popular_sizes": [], "summary": "", "sources": []}
+
+        formatted = "\n\n".join(
+            f"Source: {r.get('url', '')}\nTitle: {r.get('title', '')}\nContent: {r.get('content', '')[:600]}"
+            for r in all_results[:35]
+        )
+
+        try:
+            raw = await generate(COLOR_SIZE_PROMPT.format(results=formatted))
+            match = re.search(r"\{.*\}", raw, re.DOTALL)
+            if match:
+                return json.loads(match.group())
+        except Exception as e:
+            logger.error(f"[ColorSizeScanner] Extraction failed: {e}")
+
+        return {"popular_colors": [], "popular_sizes": [], "summary": "", "sources": []}
+
     def current_week_start(self) -> date:
         today = date.today()
         return today - timedelta(days=today.weekday())
@@ -163,3 +235,7 @@ async def generate_brief(signals_data: dict, week_of: date) -> str:
 
 def current_week_start() -> date:
     return _scanner.current_week_start()
+
+
+async def scan_color_size() -> dict:
+    return await _scanner.scan_color_size()

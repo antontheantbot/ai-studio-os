@@ -36,6 +36,55 @@ async def scan_market(background_tasks: BackgroundTasks):
     return {"status": "scanning", "message": "Scanning art market sources — brief ready in ~3 minutes"}
 
 
+@router.get("/color-trends/latest")
+async def latest_color_trends(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        text("SELECT * FROM color_size_trends ORDER BY week_of DESC LIMIT 1")
+    )
+    row = result.first()
+    return dict(row._mapping) if row else {}
+
+
+@router.post("/color-trends/scan")
+async def scan_color_trends(background_tasks: BackgroundTasks):
+    """Scan contemporary art sources for popular colors and sizes."""
+    background_tasks.add_task(_scan_color_size_and_save)
+    return {"status": "scanning", "message": "Scanning for color and size trends — ready in ~2 minutes"}
+
+
+async def _scan_color_size_and_save():
+    from app.agents.market_scanner import scan_color_size, current_week_start
+    from app.db.session import AsyncSessionLocal
+
+    week_of = current_week_start()
+    try:
+        data = await scan_color_size()
+        async with AsyncSessionLocal() as db:
+            await db.execute(
+                text("""
+                    INSERT INTO color_size_trends (id, week_of, popular_colors, popular_sizes, summary, sources)
+                    VALUES (gen_random_uuid(), :week_of, CAST(:colors AS jsonb), CAST(:sizes AS jsonb), :summary, CAST(:sources AS jsonb))
+                    ON CONFLICT (week_of) DO UPDATE SET
+                        popular_colors = EXCLUDED.popular_colors,
+                        popular_sizes = EXCLUDED.popular_sizes,
+                        summary = EXCLUDED.summary,
+                        sources = EXCLUDED.sources,
+                        updated_at = now()
+                """),
+                {
+                    "week_of": week_of,
+                    "colors": json.dumps(data.get("popular_colors", [])),
+                    "sizes": json.dumps(data.get("popular_sizes", [])),
+                    "summary": data.get("summary", ""),
+                    "sources": json.dumps(data.get("sources", [])),
+                },
+            )
+            await db.commit()
+            logger.info(f"[ColorSizeScanner] Trends saved for week {week_of}")
+    except Exception as e:
+        logger.error(f"[ColorSizeScanner] Scan and save failed: {e}")
+
+
 async def _scan_and_save():
     from app.agents.market_scanner import scan_market, generate_brief, current_week_start
     from app.db.session import AsyncSessionLocal

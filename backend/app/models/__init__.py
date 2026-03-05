@@ -8,6 +8,7 @@ from app.models.press import PressItem
 from app.models.proposal import Proposal
 from app.models.knowledge import KnowledgeItem
 from app.models.market_brief import MarketBrief
+from app.models.color_size_trend import ColorSizeTrend
 
 __all__ = [
     "Opportunity",
@@ -18,4 +19,5 @@ __all__ = [
     "Proposal",
     "KnowledgeItem",
     "MarketBrief",
+    "ColorSizeTrend",
 ]

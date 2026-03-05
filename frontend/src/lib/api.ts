@@ -105,6 +105,8 @@ export const createExhibition = (body: Omit<Exhibition, "id" | "created_at">) =>
 // ── Market Briefs ─────────────────────────────────────────────────────────────
 export const getBriefs = () => request<MarketBrief[]>("/briefs/");
 export const getLatestBrief = () => request<MarketBrief>("/briefs/latest");
+export const getLatestColorTrends = () => request<ColorSizeTrend>("/briefs/color-trends/latest");
+export const scanColorTrends = () => request<{ status: string }>("/briefs/color-trends/scan", { method: "POST" });
 export const scanMarket = () => request<{ status: string }>("/briefs/scan", { method: "POST" });
 
 // ── Chat ─────────────────────────────────────────────────────────────────────
@@ -278,6 +280,17 @@ export interface MarketBrief {
   top_artists: string[];
   top_mediums: string[];
   brief: string;
+  sources: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ColorSizeTrend {
+  id: string;
+  week_of: string;
+  popular_colors: { name: string; hex: string; trend: "rising" | "dominant" | "emerging"; context: string }[];
+  popular_sizes: { label: string; dimensions: string; medium: string; trend: "rising" | "dominant" | "emerging"; context: string }[];
+  summary: string;
   sources: string[];
   created_at: string;
   updated_at: string;
