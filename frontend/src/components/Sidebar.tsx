@@ -14,6 +14,8 @@ import {
   MessageSquare,
   Palette,
   Frame,
+  Landmark,
+  CalendarDays,
 } from "lucide-react";
 
 const NAV = [
@@ -22,6 +24,8 @@ const NAV = [
   { href: "/architecture",  label: "Architecture",  icon: Building2 },
   { href: "/artists",       label: "Artists",       icon: Palette },
   { href: "/artworks",      label: "Artworks",      icon: Frame },
+  { href: "/institutions",  label: "Institutions",  icon: Landmark },
+  { href: "/exhibitions",   label: "Exhibitions",   icon: CalendarDays },
   { href: "/collectors",    label: "Collectors",    icon: Users },
   { href: "/curators",      label: "Curators",      icon: GraduationCap },
   { href: "/press",         label: "Press",         icon: Newspaper },

@@ -75,6 +75,30 @@ export const createArtwork = (body: Omit<Artwork, "id" | "created_at" | "artist_
     body: JSON.stringify(body),
   });
 
+// ── Institutions ─────────────────────────────────────────────────────────────
+export const getInstitutions = (q?: string, digital_only?: boolean) =>
+  request<Institution[]>(
+    `/institutions/${q ? `?q=${encodeURIComponent(q)}` : digital_only ? "?digital_only=true" : ""}`
+  );
+
+export const createInstitution = (body: Omit<Institution, "id" | "created_at">) =>
+  request<{ id: string; name: string }>("/institutions/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+// ── Exhibitions ───────────────────────────────────────────────────────────────
+export const getExhibitions = (q?: string, institution_id?: string) =>
+  request<Exhibition[]>(
+    `/exhibitions/${q ? `?q=${encodeURIComponent(q)}` : institution_id ? `?institution_id=${institution_id}` : ""}`
+  );
+
+export const createExhibition = (body: Omit<Exhibition, "id" | "created_at">) =>
+  request<{ id: string; title: string }>("/exhibitions/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
 // ── Chat ─────────────────────────────────────────────────────────────────────
 export const chat = (message: string, history: ChatMessage[]) =>
   request<{ response: string; sources: string[] }>("/chat/", {
@@ -201,6 +225,34 @@ export interface Artwork {
   image_urls: string[];
   collection: string | null;
   exhibition_history: string[];
+  created_at: string;
+}
+
+export interface Institution {
+  id: string;
+  name: string;
+  city: string | null;
+  country: string | null;
+  type: string | null;
+  website: string | null;
+  focus_areas: string[];
+  annual_budget: string | null;
+  digital_art_program: boolean;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface Exhibition {
+  id: string;
+  title: string;
+  institution_id: string | null;
+  curator_id: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  type: string | null;
+  artists: string[];
+  description: string | null;
+  url: string | null;
   created_at: string;
 }
 
