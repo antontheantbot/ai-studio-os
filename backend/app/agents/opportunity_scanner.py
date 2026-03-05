@@ -65,6 +65,21 @@ TAVILY_QUERIES = [
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
+_INCLUSION_RULE = """
+INCLUSION RULE — include an opportunity if ANY of these apply:
+  • It is open to all or multiple art forms (interdisciplinary, open media, any medium)
+  • It explicitly welcomes digital art, new media, or technology-based work
+  • It covers a broad category that digital artists commonly work in (photography, video,
+    installation, print, performance, drawing, painting, mixed media)
+
+EXCLUSION RULE — skip an opportunity if BOTH of these are true:
+  • It is restricted to a single traditional medium (e.g. "oil painting only",
+    "watercolour only", "ceramics only", "sculpture only", "jewellery only")
+  • It makes no mention of digital, new media, photography, video, or contemporary practice
+
+In other words: if it explicitly says "no digital art" or is narrowly for one non-digital
+craft medium, skip it. If there is any ambiguity, include it."""
+
 EXTRACT_PROMPT = """Extract structured opportunity data from the following web page text.
 Return a JSON array of objects with these fields:
 - title (string)
@@ -77,14 +92,12 @@ Return a JSON array of objects with these fields:
 - award (string or null)
 - url (string, full URL to the specific opportunity)
 - tags (array of strings relevant to the opportunity)
-
-Include ALL forms of contemporary art: digital art, new media, photography, painting, drawing,
-printmaking, sculpture, installation, video, performance, mixed media, and interdisciplinary work.
+{inclusion_rule}
 Only include clearly identifiable art opportunities with real deadlines in the future.
 If no opportunities found, return [].
 
 Page text:
-{text}"""
+{{text}}"""
 
 TAVILY_EXTRACT_PROMPT = """From these web search results, extract art opportunities (open calls, residencies, commissions, grants, festivals, prizes).
 Return a JSON array of objects with these fields:
@@ -99,13 +112,14 @@ Return a JSON array of objects with these fields:
 - url (string, the direct URL to apply or learn more)
 - category (string: "open_call" | "residency" | "commission" | "grant" | "festival")
 - tags (array of strings: art forms, themes, or keywords)
-
-Include ALL art forms: digital, photography, painting, drawing, printmaking, sculpture, video,
-installation, performance, mixed media, and interdisciplinary. Do NOT limit to any single medium.
+{inclusion_rule}
 Only include opportunities with upcoming deadlines (future dates). Return [] if none found.
 
 Search results:
-{results}"""
+{{results}}"""
+
+EXTRACT_PROMPT = EXTRACT_PROMPT.format(inclusion_rule=_INCLUSION_RULE)
+TAVILY_EXTRACT_PROMPT = TAVILY_EXTRACT_PROMPT.format(inclusion_rule=_INCLUSION_RULE)
 
 HEADERS = {
     "User-Agent": (
