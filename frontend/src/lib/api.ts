@@ -20,6 +20,9 @@ export const triggerOpportunityScan = () =>
 export const getArchitecture = (q?: string) =>
   request<ArchitectureLocation[]>(`/architecture/${q ? `?q=${encodeURIComponent(q)}` : ""}`);
 
+export const triggerArchitectureScan = () =>
+  request<{ status: string }>("/architecture/scan", { method: "POST" });
+
 // ── Collectors ───────────────────────────────────────────────────────────────
 export const getCollectors = (q?: string) =>
   request<Collector[]>(`/collectors/${q ? `?q=${encodeURIComponent(q)}` : ""}`);

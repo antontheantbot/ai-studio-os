@@ -1,25 +1,38 @@
 "use client";
 import { useState } from "react";
 import useSWR from "swr";
-import { Building2, ExternalLink } from "lucide-react";
+import { Building2, ExternalLink, RefreshCw } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import SearchBar from "@/components/SearchBar";
 import EmptyState from "@/components/EmptyState";
-import { getArchitecture, type ArchitectureLocation } from "@/lib/api";
+import { getArchitecture, triggerArchitectureScan, type ArchitectureLocation } from "@/lib/api";
 
 export default function ArchitecturePage() {
   const [query, setQuery] = useState("");
+  const [scanning, setScanning] = useState(false);
 
-  const { data, isLoading } = useSWR(
+  const { data, isLoading, mutate } = useSWR(
     ["architecture", query],
     () => getArchitecture(query || undefined)
   );
+
+  const handleScan = async () => {
+    setScanning(true);
+    await triggerArchitectureScan();
+    setTimeout(() => { setScanning(false); mutate(); }, 3000);
+  };
 
   return (
     <div>
       <PageHeader
         title="Architecture Scout"
         description="Locations scouted for photography and installations"
+        actions={
+          <button onClick={handleScan} disabled={scanning} className="btn-primary flex items-center gap-2">
+            <RefreshCw size={13} className={scanning ? "animate-spin" : ""} />
+            {scanning ? "Scanning..." : "Scan Web"}
+          </button>
+        }
       />
 
       <div className="mb-4">
@@ -29,7 +42,7 @@ export default function ArchitecturePage() {
       {isLoading && <p className="text-studio-text-muted text-xs">Loading...</p>}
 
       {!isLoading && (!data || data.length === 0) && (
-        <EmptyState icon={Building2} message="No locations scouted yet" sub="The scout agent runs weekly — trigger it manually via API" />
+        <EmptyState icon={Building2} message="No locations scouted yet" sub="Click Scan Web to search the internet for architecture locations" />
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
