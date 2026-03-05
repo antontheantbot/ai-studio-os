@@ -123,3 +123,35 @@ class OpportunityScanner:
                 saved += 1
             await db.commit()
         return saved
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ENHANCED: Fit Scoring Integration
+# ═══════════════════════════════════════════════════════════════════════════
+
+async def scan_with_scoring():
+    """Run the opportunity scanner and calculate fit scores for all results."""
+    from app.services.fit_scoring import calculate_fit_score, score_and_update_opportunity
+    from app.db.session import AsyncSessionLocal
+    from sqlalchemy import text
+
+    # First run the normal scan
+    await run()
+
+    # Then score all opportunities that don't have a fit_score
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            text("SELECT id, title, description, category, budget, url FROM opportunities WHERE fit_score IS NULL")
+        )
+        opportunities = result.fetchall()
+
+        for opp in opportunities:
+            opp_data = {
+                "title": opp.title,
+                "description": opp.description,
+                "category": opp.category,
+                "budget": opp.budget,
+            }
+            await score_and_update_opportunity(db, str(opp.id), opp_data)
+
+        logger.info(f"Scored {len(opportunities)} opportunities")
