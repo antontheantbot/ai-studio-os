@@ -1,5 +1,5 @@
 from datetime import date
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 import sqlalchemy as sa
 from pydantic import BaseModel
@@ -28,12 +28,18 @@ class OpportunityCreate(BaseModel):
 @router.get("/")
 async def list_opportunities(
     q: str | None = Query(None),
-    limit: int = Query(20, le=100),
+    upcoming_only: bool = Query(True),
+    limit: int = Query(50, le=200),
     db: AsyncSession = Depends(get_db),
 ):
     if q:
         return await vector_search(db, "opportunities", q, limit=limit)
-    result = await db.execute(sa.text("SELECT * FROM opportunities ORDER BY created_at DESC LIMIT :limit"), {"limit": limit})
+    query = "SELECT * FROM opportunities"
+    params = {"limit": limit}
+    if upcoming_only:
+        query += " WHERE deadline IS NULL OR deadline >= CURRENT_DATE"
+    query += " ORDER BY deadline ASC NULLS LAST LIMIT :limit"
+    result = await db.execute(sa.text(query), params)
     return [dict(r._mapping) for r in result]
 
 
@@ -67,7 +73,8 @@ async def create_opportunity(opp: OpportunityCreate, db: AsyncSession = Depends(
 
 
 @router.post("/scan")
-async def trigger_scan():
-    from workers.celery_app import celery_app
-    task = celery_app.send_task("tasks.scan_opportunities")
-    return {"task_id": task.id, "status": "queued"}
+async def trigger_scan(background_tasks: BackgroundTasks):
+    """Trigger a live scan of all opportunity sources in the background."""
+    from app.agents.opportunity_scanner import scan_with_scoring
+    background_tasks.add_task(scan_with_scoring)
+    return {"status": "scanning", "sources": 11, "message": "Scan started — check back in ~2 minutes"}
