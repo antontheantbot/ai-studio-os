@@ -1,7 +1,9 @@
 """
 Opportunity Scanner Agent
-Scrapes art open calls, residencies, commissions, and festivals.
-Uses httpx + BeautifulSoup for fetching, Claude for structured extraction.
+Scans art open calls, residencies, commissions, grants, and festivals.
+Uses Tavily for live web search + httpx/BeautifulSoup for targeted scraping.
+Covers digital art, new media, photography, painting, printmaking, and
+all forms of contemporary art.
 """
 import json
 import logging
@@ -11,28 +13,57 @@ from datetime import date
 import httpx
 from bs4 import BeautifulSoup
 from sqlalchemy import text
+from tavily import AsyncTavilyClient
 
+from app.core.config import settings
 from app.db.session import AsyncSessionLocal
 from app.services.embeddings import embed
 from app.services.llm import generate
 
 logger = logging.getLogger(__name__)
 
+# ── Hardcoded sources (scraped directly) ─────────────────────────────────────
+
 SOURCES = [
     # Residencies
     {"url": "https://resartis.org/residencies/", "category": "residency", "name": "ResArtis"},
     {"url": "https://artistcommunities.org/residencies", "category": "residency", "name": "Artist Communities Alliance"},
-    # Open calls
+    # Open calls — digital / new media
     {"url": "https://callforentry.org", "category": "open_call", "name": "CaFÉ"},
     {"url": "https://www.foundwork.art/opportunities", "category": "open_call", "name": "Foundwork"},
     {"url": "https://www.sundance.org/apply/", "category": "open_call", "name": "Sundance"},
+    # Open calls — photography
+    {"url": "https://www.lensculture.com/competitions", "category": "open_call", "name": "LensCulture"},
+    {"url": "https://www.photolucida.org/calls-for-entry/", "category": "open_call", "name": "Photolucida"},
+    # Open calls — contemporary art (broad)
+    {"url": "https://www.artsy.net/articles?tag=open-calls", "category": "open_call", "name": "Artsy Open Calls"},
+    {"url": "https://www.e-flux.com/announcements/", "category": "open_call", "name": "e-flux Announcements"},
+    {"url": "https://aestheticamagazine.com/opportunities/", "category": "open_call", "name": "Aesthetica"},
     # Commissions / Grants
     {"url": "https://www.creativecapital.org/funding-opportunities/", "category": "commission", "name": "Creative Capital"},
-    # Festivals
+    {"url": "https://www.artadia.org/apply/", "category": "grant", "name": "Artadia"},
+    # Festivals — digital / media art
     {"url": "https://transmediale.de/en", "category": "festival", "name": "Transmediale"},
     {"url": "https://ars.electronica.art/news/", "category": "festival", "name": "Ars Electronica"},
     {"url": "https://www.siggraph.org/learn/conference-content/", "category": "festival", "name": "SIGGRAPH"},
 ]
+
+# ── Tavily queries (live internet search for new opportunities) ────────────────
+
+TAVILY_QUERIES = [
+    "contemporary art open call 2026 deadline submissions",
+    "photography open call competition 2026 apply",
+    "art residency open call 2026 applications",
+    "painting drawing printmaking open call 2026",
+    "art grant funding opportunity 2026 artists apply",
+    "digital art new media open call 2026",
+    "contemporary art prize award 2026 submissions open",
+    "emerging artist opportunity residency grant 2026",
+    "international art festival open call 2026",
+    "photography prize competition award 2026",
+]
+
+# ── Prompts ───────────────────────────────────────────────────────────────────
 
 EXTRACT_PROMPT = """Extract structured opportunity data from the following web page text.
 Return a JSON array of objects with these fields:
@@ -45,14 +76,36 @@ Return a JSON array of objects with these fields:
 - fee (string or null)
 - award (string or null)
 - url (string, full URL to the specific opportunity)
-- tags (array of strings relevant to digital/media art)
+- tags (array of strings relevant to the opportunity)
 
-Focus on opportunities relevant to digital art, new media, installations, and technology-based art.
+Include ALL forms of contemporary art: digital art, new media, photography, painting, drawing,
+printmaking, sculpture, installation, video, performance, mixed media, and interdisciplinary work.
 Only include clearly identifiable art opportunities with real deadlines in the future.
 If no opportunities found, return [].
 
 Page text:
 {text}"""
+
+TAVILY_EXTRACT_PROMPT = """From these web search results, extract art opportunities (open calls, residencies, commissions, grants, festivals, prizes).
+Return a JSON array of objects with these fields:
+- title (string)
+- description (string, 2-3 sentences about the opportunity)
+- organizer (string, who is running it)
+- location (string)
+- country (string)
+- deadline (string, ISO date YYYY-MM-DD or null if not found)
+- fee (string or null)
+- award (string or null, prize money or stipend if mentioned)
+- url (string, the direct URL to apply or learn more)
+- category (string: "open_call" | "residency" | "commission" | "grant" | "festival")
+- tags (array of strings: art forms, themes, or keywords)
+
+Include ALL art forms: digital, photography, painting, drawing, printmaking, sculpture, video,
+installation, performance, mixed media, and interdisciplinary. Do NOT limit to any single medium.
+Only include opportunities with upcoming deadlines (future dates). Return [] if none found.
+
+Search results:
+{results}"""
 
 HEADERS = {
     "User-Agent": (
@@ -73,17 +126,14 @@ async def fetch_text(url: str, timeout: int = 25) -> str:
         response = await client.get(url)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
-        # Remove noise
         for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
             tag.decompose()
         text = soup.get_text(separator="\n", strip=True)
-        # Collapse blank lines
         lines = [ln for ln in text.splitlines() if ln.strip()]
         return "\n".join(lines)
 
 
 def parse_deadline(raw: str | None) -> date | None:
-    """Convert ISO date string to Python date, return None on failure."""
     if not raw:
         return None
     try:
@@ -93,8 +143,13 @@ def parse_deadline(raw: str | None) -> date | None:
 
 
 class OpportunityScanner:
+    def __init__(self):
+        self._tavily = AsyncTavilyClient(api_key=settings.TAVILY_API_KEY)
+
     async def run(self) -> int:
         saved = 0
+
+        # 1. Scrape hardcoded sources
         for source in SOURCES:
             try:
                 count = await self._scrape_source(source)
@@ -102,11 +157,20 @@ class OpportunityScanner:
                 logger.info(f"[OpportunityScanner] {source['name']}: {count} saved")
             except Exception as e:
                 logger.error(f"[OpportunityScanner] Failed {source['name']}: {e}")
+
+        # 2. Tavily live web search
+        try:
+            count = await self._tavily_scan()
+            saved += count
+            logger.info(f"[OpportunityScanner] Tavily scan: {count} saved")
+        except Exception as e:
+            logger.error(f"[OpportunityScanner] Tavily scan failed: {e}")
+
         return saved
 
     async def _scrape_source(self, source: dict) -> int:
         text_content = await fetch_text(source["url"])
-        text_content = text_content[:12000]  # stay within token limits
+        text_content = text_content[:12000]
 
         raw = await generate(EXTRACT_PROMPT.format(text=text_content))
 
@@ -120,9 +184,51 @@ class OpportunityScanner:
             logger.warning(f"[OpportunityScanner] JSON parse failed for {source['name']}")
             return 0
 
-        return await self._save_items(items, source["category"])
+        for item in items:
+            item.setdefault("category", source["category"])
 
-    async def _save_items(self, items: list[dict], category: str) -> int:
+        return await self._save_items(items)
+
+    async def _tavily_scan(self) -> int:
+        all_results = []
+        seen_urls: set = set()
+
+        for query in TAVILY_QUERIES:
+            try:
+                response = await self._tavily.search(
+                    query=query,
+                    search_depth="advanced",
+                    max_results=5,
+                    include_answer=False,
+                )
+                for r in response.get("results", []):
+                    if r.get("url") not in seen_urls:
+                        all_results.append(r)
+                        seen_urls.add(r.get("url", ""))
+                logger.info(f"[OpportunityScanner] Tavily '{query}': {len(response.get('results', []))} results")
+            except Exception as e:
+                logger.error(f"[OpportunityScanner] Tavily query failed '{query}': {e}")
+
+        if not all_results:
+            return 0
+
+        formatted = "\n\n".join(
+            f"Source: {r.get('url', '')}\nTitle: {r.get('title', '')}\nContent: {r.get('content', '')[:500]}"
+            for r in all_results[:50]
+        )
+
+        try:
+            raw = await generate(TAVILY_EXTRACT_PROMPT.format(results=formatted))
+            match = re.search(r"\[.*\]", raw, re.DOTALL)
+            if not match:
+                return 0
+            items = json.loads(match.group())
+            return await self._save_items(items)
+        except Exception as e:
+            logger.error(f"[OpportunityScanner] Tavily extraction failed: {e}")
+            return 0
+
+    async def _save_items(self, items: list[dict]) -> int:
         saved = 0
         async with AsyncSessionLocal() as db:
             for item in items:
@@ -153,7 +259,7 @@ class OpportunityScanner:
                     {
                         "title": item.get("title"),
                         "description": item.get("description"),
-                        "category": category,
+                        "category": item.get("category", "open_call"),
                         "organizer": item.get("organizer"),
                         "location": item.get("location"),
                         "country": item.get("country"),
@@ -170,18 +276,12 @@ class OpportunityScanner:
         return saved
 
 
-# Module-level instance for Celery tasks and direct calls
 _scanner = OpportunityScanner()
 
 
 async def run() -> int:
-    """Run the full opportunity scan."""
     return await _scanner.run()
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# ENHANCED: Fit Scoring Integration
-# ═══════════════════════════════════════════════════════════════════════════
 
 async def scan_with_scoring() -> int:
     """Run the opportunity scanner and calculate fit scores for all results."""
