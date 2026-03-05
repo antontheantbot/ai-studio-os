@@ -53,6 +53,28 @@ export const createNote = (body: { title: string; content: string; tags: string[
     body: JSON.stringify(body),
   });
 
+// ── Artists ──────────────────────────────────────────────────────────────────
+export const getArtists = (q?: string) =>
+  request<Artist[]>(`/artists/${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+
+export const createArtist = (body: Omit<Artist, "id" | "created_at">) =>
+  request<{ id: string; name: string }>("/artists/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+// ── Artworks ──────────────────────────────────────────────────────────────────
+export const getArtworks = (q?: string, artist_id?: string) =>
+  request<Artwork[]>(
+    `/artworks/${q ? `?q=${encodeURIComponent(q)}` : artist_id ? `?artist_id=${artist_id}` : ""}`
+  );
+
+export const createArtwork = (body: Omit<Artwork, "id" | "created_at" | "artist_name">) =>
+  request<{ id: string; title: string }>("/artworks/", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
 // ── Chat ─────────────────────────────────────────────────────────────────────
 export const chat = (message: string, history: ChatMessage[]) =>
   request<{ response: string; sources: string[] }>("/chat/", {
@@ -152,6 +174,34 @@ export interface KnowledgeItem {
   tags: string[];
   created_at: string;
   similarity?: number;
+}
+
+export interface Artist {
+  id: string;
+  name: string;
+  country: string | null;
+  city: string | null;
+  bio: string | null;
+  medium: string[];
+  website: string | null;
+  instagram: string | null;
+  represented_by: string[];
+  created_at: string;
+}
+
+export interface Artwork {
+  id: string;
+  title: string;
+  artist_id: string | null;
+  artist_name?: string;
+  year: number | null;
+  medium: string | null;
+  dimensions: string | null;
+  description: string | null;
+  image_urls: string[];
+  collection: string | null;
+  exhibition_history: string[];
+  created_at: string;
 }
 
 export interface ChatMessage {

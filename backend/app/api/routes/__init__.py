@@ -9,6 +9,8 @@ from app.api.routes import (
     proposals,
     knowledge,
     chat,
+    artists,
+    artworks,
 )
 
 router = APIRouter()
@@ -21,3 +23,5 @@ router.include_router(press.router, prefix="/press", tags=["Press"])
 router.include_router(proposals.router, prefix="/proposals", tags=["Proposals"])
 router.include_router(knowledge.router, prefix="/knowledge", tags=["Knowledge"])
 router.include_router(chat.router, prefix="/chat", tags=["Chat"])
+router.include_router(artists.router, prefix="/artists", tags=["Artists"])
+router.include_router(artworks.router, prefix="/artworks", tags=["Artworks"])

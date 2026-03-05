@@ -12,12 +12,16 @@ import {
   FileText,
   BookOpen,
   MessageSquare,
+  Palette,
+  Frame,
 } from "lucide-react";
 
 const NAV = [
   { href: "/",              label: "Dashboard",    icon: LayoutDashboard },
   { href: "/opportunities", label: "Opportunities", icon: Megaphone },
   { href: "/architecture",  label: "Architecture",  icon: Building2 },
+  { href: "/artists",       label: "Artists",       icon: Palette },
+  { href: "/artworks",      label: "Artworks",      icon: Frame },
   { href: "/collectors",    label: "Collectors",    icon: Users },
   { href: "/curators",      label: "Curators",      icon: GraduationCap },
   { href: "/press",         label: "Press",         icon: Newspaper },
