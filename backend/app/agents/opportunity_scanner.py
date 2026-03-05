@@ -29,6 +29,46 @@ SOURCES = [
         "category": "open_call",
         "name": "CaFÉ",
     },
+    {
+        "url": "https://www.rhizome.org/opportunities/",
+        "category": "open_call",
+        "name": "Rhizome",
+    },
+    {
+        "url": "https://www.foundwork.art/opportunities",
+        "category": "open_call",
+        "name": "Foundwork",
+    },
+    {
+        "url": "https://www.creativecapital.org/funding-opportunities/",
+        "category": "commission",
+        "name": "Creative Capital",
+    },
+    {
+        "url": "https://www.nyfa.org/awards-grants/",
+        "category": "commission",
+        "name": "NYFA",
+    },
+    {
+        "url": "https://www.transmediale.de/open-call",
+        "category": "festival",
+        "name": "Transmediale",
+    },
+    {
+        "url": "https://ars.electronica.art/news/en/open-calls/",
+        "category": "festival",
+        "name": "Ars Electronica",
+    },
+    {
+        "url": "https://www.siggraph.org/learn/conference-content/",
+        "category": "festival",
+        "name": "SIGGRAPH",
+    },
+    {
+        "url": "https://www.sundance.org/programs/new-frontier/",
+        "category": "open_call",
+        "name": "Sundance New Frontier",
+    },
 ]
 
 EXTRACT_PROMPT = """Extract structured opportunity data from the following web page text.
