@@ -55,7 +55,7 @@ async def create_artist(artist: ArtistCreate, db: AsyncSession = Depends(get_db)
     result = await db.execute(
         sa.text("""
             INSERT INTO artists (name, country, city, bio, medium, website, instagram, represented_by, embedding)
-            VALUES (:name, :country, :city, :bio, :medium, :website, :instagram, :represented_by, :embedding::vector)
+            VALUES (:name, :country, :city, :bio, :medium, :website, :instagram, :represented_by, CAST(:embedding AS vector))
             RETURNING id, name, created_at
         """),
         {

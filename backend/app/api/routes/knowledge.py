@@ -33,7 +33,7 @@ async def create_note(note: NoteCreate, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         sa.text("""
             INSERT INTO knowledge_items (title, content, tags, embedding, source_type)
-            VALUES (:title, :content, :tags, :embedding::vector, 'note')
+            VALUES (:title, :content, :tags, CAST(:embedding AS vector), 'note')
             RETURNING id, title, created_at
         """),
         {

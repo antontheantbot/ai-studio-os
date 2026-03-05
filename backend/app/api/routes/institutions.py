@@ -62,7 +62,7 @@ async def create_institution(inst: InstitutionCreate, db: AsyncSession = Depends
                  annual_budget, digital_art_program, notes, embedding)
             VALUES
                 (:name, :city, :country, :type, :website, :focus_areas,
-                 :annual_budget, :digital_art_program, :notes, :embedding::vector)
+                 :annual_budget, :digital_art_program, :notes, CAST(:embedding AS vector))
             RETURNING id, name, created_at
         """),
         {

@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 import sqlalchemy as sa
@@ -67,15 +68,15 @@ async def create_exhibition(ex: ExhibitionCreate, db: AsyncSession = Depends(get
                  type, artists, description, url, embedding)
             VALUES
                 (:title, :institution_id, :curator_id, :start_date, :end_date,
-                 :type, :artists, :description, :url, :embedding::vector)
+                 :type, :artists, :description, :url, CAST(:embedding AS vector))
             RETURNING id, title, created_at
         """),
         {
             "title": ex.title,
             "institution_id": ex.institution_id,
             "curator_id": ex.curator_id,
-            "start_date": ex.start_date,
-            "end_date": ex.end_date,
+            "start_date": date.fromisoformat(ex.start_date) if ex.start_date else None,
+            "end_date": date.fromisoformat(ex.end_date) if ex.end_date else None,
             "type": ex.type,
             "artists": ex.artists,
             "description": ex.description,

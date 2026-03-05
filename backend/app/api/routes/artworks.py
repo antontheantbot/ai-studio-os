@@ -67,7 +67,7 @@ async def create_artwork(artwork: ArtworkCreate, db: AsyncSession = Depends(get_
                  image_urls, collection, exhibition_history, embedding)
             VALUES
                 (:title, :artist_id, :year, :medium, :dimensions, :description,
-                 :image_urls, :collection, :exhibition_history, :embedding::vector)
+                 :image_urls, :collection, :exhibition_history, CAST(:embedding AS vector))
             RETURNING id, title, created_at
         """),
         {
