@@ -1,0 +1,13 @@
+{
+  "name": "openclaw-aistudioos",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "AI Studio OS plugin for OpenClaw — query opportunities, grants, artists, market briefs, architecture locations, and the knowledge base.",
+  "license": "MIT",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.47"
+  },
+  "openclaw": {
+    "extensions": ["./index.ts"]
+  }
+}
