@@ -67,6 +67,12 @@ setup:
 	docker compose up -d api
 	@echo "API running at http://localhost:8000/docs"
 
+# ── Telegram / OpenClaw plugin sync ────────────────────────────────────────────
+sync-plugin:
+	rsync -av --delete openclaw-plugin/ ~/.openclaw/extensions/openclaw-aistudioos/
+	openclaw daemon restart
+	@echo "Plugin synced and gateway restarted"
+
 # ── Clean ──────────────────────────────────────────────────────────────────────
 clean:
 	docker compose down -v --remove-orphans
