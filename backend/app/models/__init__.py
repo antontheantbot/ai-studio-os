@@ -10,6 +10,7 @@ from app.models.knowledge import KnowledgeItem
 from app.models.market_brief import MarketBrief
 from app.models.color_size_trend import ColorSizeTrend
 from app.models.journalist import Journalist
+from app.models.daily_action import DailyAction
 
 __all__ = [
     "Opportunity",
@@ -22,4 +23,5 @@ __all__ = [
     "MarketBrief",
     "ColorSizeTrend",
     "Journalist",
+    "DailyAction",
 ]

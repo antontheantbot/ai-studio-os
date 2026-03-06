@@ -120,6 +120,11 @@ export const addJournalistsFromText = (text: string) =>
     body: JSON.stringify({ text }),
   });
 
+// ── Daily Action ──────────────────────────────────────────────────────────────
+export const getDailyAction = () => request<DailyAction>("/daily/today");
+export const generateDailyAction = () => request<DailyAction>("/daily/generate", { method: "POST" });
+export const getDailyHistory = () => request<DailyAction[]>("/daily/history");
+
 // ── Chat ─────────────────────────────────────────────────────────────────────
 export const chat = (message: string, history: ChatMessage[]) =>
   request<{ response: string; sources: string[] }>("/chat/", {
@@ -292,6 +297,16 @@ export interface MarketBrief {
   top_mediums: string[];
   brief: string;
   sources: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyAction {
+  id: string;
+  date: string;
+  goal_index: number;
+  goal_name: string;
+  content: string;
   created_at: string;
   updated_at: string;
 }
