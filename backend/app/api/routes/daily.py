@@ -120,9 +120,9 @@ async def force_generate(db: AsyncSession = Depends(get_db)):
     """Force-regenerate today's action (replaces existing)."""
     today = date.today()
 
+    # Advance from today's current entry if it exists, otherwise from yesterday's
     last = await db.execute(
-        text("SELECT goal_index FROM daily_actions WHERE date < :d ORDER BY date DESC LIMIT 1"),
-        {"d": today},
+        text("SELECT goal_index FROM daily_actions ORDER BY date DESC, updated_at DESC LIMIT 1"),
     )
     last_row = last.first()
     last_index = last_row.goal_index if last_row else -1
