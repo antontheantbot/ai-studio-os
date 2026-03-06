@@ -70,15 +70,23 @@ async def add_from_text(body: PasteBody, db: AsyncSession = Depends(get_db)):
     if not body.text.strip():
         return {"added": 0, "skipped": 0, "message": "No text provided"}
 
-    raw = await generate(PARSE_PROMPT.format(text=body.text[:6000]))
-    match = re.search(r"\[.*\]", raw, re.DOTALL)
-    if not match:
+    raw = await generate(PARSE_PROMPT.format(text=body.text[:8000]))
+
+    # Strip markdown code fences if present
+    raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
+
+    # Find the JSON array — grab from first [ to last ]
+    start = raw.find("[")
+    end = raw.rfind("]")
+    if start == -1 or end == -1 or end <= start:
+        logger.error(f"[Journalists/add] No JSON array found in LLM response: {raw[:300]}")
         return {"added": 0, "skipped": 0, "message": "Could not parse any profiles from the text"}
 
     try:
-        items = json.loads(match.group())
-    except json.JSONDecodeError:
-        return {"added": 0, "skipped": 0, "message": "JSON parse error"}
+        items = json.loads(raw[start:end + 1])
+    except json.JSONDecodeError as e:
+        logger.error(f"[Journalists/add] JSON parse error: {e} — raw: {raw[start:start+300]}")
+        return {"added": 0, "skipped": 0, "message": f"JSON parse error: {e}"}
 
     added, skipped = 0, 0
     for item in items:
