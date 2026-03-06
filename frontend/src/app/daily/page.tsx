@@ -99,14 +99,16 @@ export default function DailyPage() {
         {showHistory ? "Hide" : "Show"} past actions
       </button>
 
-      {showHistory && history && history.length > 1 && (
-        <div className="grid grid-cols-1 gap-3">
-          {history
-            .filter((a) => !today || a.id !== today.id)
-            .map((a) => (
-              <ActionCard key={a.id} action={a} />
-            ))}
-        </div>
+      {showHistory && (
+        <>
+          {!history && <p className="text-studio-text-muted text-xs">Loading...</p>}
+          {history && (() => {
+            const past = history.filter((a) => !today || a.id !== today.id);
+            return past.length > 0
+              ? <div className="grid grid-cols-1 gap-3">{past.map((a) => <ActionCard key={a.id} action={a} />)}</div>
+              : <p className="text-studio-text-muted text-xs">No past actions yet — they'll appear here as you generate more over the coming days.</p>;
+          })()}
+        </>
       )}
     </div>
   );
