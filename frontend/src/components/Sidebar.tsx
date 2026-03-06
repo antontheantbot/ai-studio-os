@@ -18,6 +18,7 @@ import {
   CalendarDays,
   TrendingUp,
   PenLine,
+  Zap,
 } from "lucide-react";
 
 const NAV = [
@@ -35,6 +36,7 @@ const NAV = [
   { href: "/briefs",        label: "Trend-to-Brief", icon: TrendingUp },
   { href: "/proposals",     label: "Proposals",     icon: FileText },
   { href: "/knowledge",     label: "Knowledge",     icon: BookOpen },
+  { href: "/daily",         label: "Daily Action",  icon: Zap },
   { href: "/chat",          label: "Chat",          icon: MessageSquare },
 ];
 
