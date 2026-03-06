@@ -87,10 +87,10 @@ async def add_from_text(body: PasteBody, db: AsyncSession = Depends(get_db)):
             await db.execute(
                 sa.text("""
                     INSERT INTO journalists
-                        (id, name, bio, publications, beats, email, social_links, location, country, notes)
+                        (id, name, bio, publications, beats, email, social_links, location, country, notes, embedding)
                     VALUES
                         (gen_random_uuid(), :name, :bio, CAST(:publications AS jsonb), CAST(:beats AS jsonb),
-                         :email, CAST(:social_links AS jsonb), :location, :country, :notes)
+                         :email, CAST(:social_links AS jsonb), :location, :country, :notes, CAST(:embedding AS vector))
                     ON CONFLICT (name) DO NOTHING
                 """),
                 {
@@ -103,6 +103,7 @@ async def add_from_text(body: PasteBody, db: AsyncSession = Depends(get_db)):
                     "location": item.get("location"),
                     "country": item.get("country"),
                     "notes": item.get("notes"),
+                    "embedding": embedding_str,
                 },
             )
             added += 1
