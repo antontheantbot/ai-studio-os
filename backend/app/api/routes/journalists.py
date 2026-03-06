@@ -7,8 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import sqlalchemy as sa
 
 from app.db.session import get_db
-from app.services.search import vector_search
-from app.services.embeddings import embed
 from app.services.llm import generate
 
 router = APIRouter()
@@ -41,10 +39,24 @@ async def list_journalists(
     db: AsyncSession = Depends(get_db),
 ):
     if q:
-        return await vector_search(db, "journalists", q, limit=limit)
-    result = await db.execute(
-        sa.text("SELECT * FROM journalists ORDER BY name LIMIT :limit"), {"limit": limit}
-    )
+        pattern = f"%{q}%"
+        result = await db.execute(
+            sa.text("""
+                SELECT * FROM journalists
+                WHERE name ILIKE :q
+                   OR bio ILIKE :q
+                   OR email ILIKE :q
+                   OR publications::text ILIKE :q
+                   OR beats::text ILIKE :q
+                   OR location ILIKE :q
+                ORDER BY name LIMIT :limit
+            """),
+            {"q": pattern, "limit": limit},
+        )
+    else:
+        result = await db.execute(
+            sa.text("SELECT * FROM journalists ORDER BY name LIMIT :limit"), {"limit": limit}
+        )
     return [dict(r._mapping) for r in result]
 
 
@@ -80,17 +92,14 @@ async def add_from_text(body: PasteBody, db: AsyncSession = Depends(get_db)):
         if exists.first():
             skipped += 1
             continue
-        embed_text = f"{name} {' '.join(item.get('publications', []))} {item.get('bio', '')} {' '.join(item.get('beats', []))}"
-        embedding = await embed(embed_text)
-        embedding_str = f"[{','.join(str(x) for x in embedding)}]"
         try:
             await db.execute(
                 sa.text("""
                     INSERT INTO journalists
-                        (id, name, bio, publications, beats, email, social_links, location, country, notes, embedding)
+                        (id, name, bio, publications, beats, email, social_links, location, country, notes)
                     VALUES
                         (gen_random_uuid(), :name, :bio, CAST(:publications AS jsonb), CAST(:beats AS jsonb),
-                         :email, CAST(:social_links AS jsonb), :location, :country, :notes, CAST(:embedding AS vector))
+                         :email, CAST(:social_links AS jsonb), :location, :country, :notes)
                     ON CONFLICT (name) DO NOTHING
                 """),
                 {
@@ -103,7 +112,6 @@ async def add_from_text(body: PasteBody, db: AsyncSession = Depends(get_db)):
                     "location": item.get("location"),
                     "country": item.get("country"),
                     "notes": item.get("notes"),
-                    "embedding": embedding_str,
                 },
             )
             added += 1
