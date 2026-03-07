@@ -52,7 +52,7 @@ async def list_knowledge(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        sa.text("SELECT id, title, tags, source_type, created_at FROM knowledge_items ORDER BY created_at DESC LIMIT :limit"),
+        sa.text("SELECT id, title, content, summary, tags, source_type, created_at FROM knowledge_items ORDER BY created_at DESC LIMIT :limit"),
         {"limit": limit},
     )
     return [dict(r._mapping) for r in result]
