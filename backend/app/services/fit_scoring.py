@@ -134,7 +134,7 @@ def calculate_fit_score(
                 scores["budget_match"] = 75
         else:
             scores["budget_match"] = 50  # Unknown budget
-    except:
+    except (ValueError, TypeError, AttributeError):
         scores["budget_match"] = 50
 
     # ─── Calculate Final Score ──────────────────────────────────────────────

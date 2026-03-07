@@ -101,7 +101,7 @@ class StrategyAdvisor:
                         )
                         context_parts.append(inst_text)
                         sources.extend([{"type": "institution", "name": r.name} for r in inst_rows])
-                except:
+                except Exception:
                     pass  # Table might not exist yet
 
                 # Also check curators for institution info
