@@ -132,11 +132,12 @@ async def add_from_text(body: PasteBody, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/scan")
-async def scan(background_tasks: BackgroundTasks):
-    """Trigger a live web scan for journalists covering art, culture and architecture."""
-    from app.agents.web_ingestor import scan_journalists
-    background_tasks.add_task(scan_journalists)
-    return {"status": "scanning", "message": "Scanning for journalists — check back in ~2 minutes"}
+async def scan():
+    """Scan the web for new journalists, then search for email addresses on any newly added ones."""
+    from app.agents.web_ingestor import scan_journalists, enrich_recent_journalists
+    added = await scan_journalists()
+    emails_found = await enrich_recent_journalists(minutes=10, batch_size=added or 10)
+    return {"status": "done", "added": added, "emails_found": emails_found}
 
 
 @router.post("/enrich")

@@ -10,6 +10,7 @@ import { getJournalists, scanJournalists, addJournalistsFromText, type Journalis
 export default function JournalistsPage() {
   const [query, setQuery] = useState("");
   const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<{ added: number; emails_found: number } | null>(null);
   const [showPaste, setShowPaste] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [adding, setAdding] = useState(false);
@@ -22,8 +23,15 @@ export default function JournalistsPage() {
 
   const handleScan = async () => {
     setScanning(true);
-    await scanJournalists();
-    setTimeout(() => { setScanning(false); mutate(); }, 120000);
+    setScanResult(null);
+    try {
+      const result = await scanJournalists();
+      setScanResult({ added: result.added, emails_found: result.emails_found });
+      mutate();
+      setTimeout(() => setScanResult(null), 6000);
+    } finally {
+      setScanning(false);
+    }
   };
 
   const handleAdd = async () => {
@@ -65,6 +73,20 @@ export default function JournalistsPage() {
           </div>
         }
       />
+
+      {scanResult && (
+        <div className="fixed bottom-6 right-6 z-50 bg-studio-surface border border-studio-accent/40 rounded-lg px-4 py-3 shadow-lg flex items-center gap-3 text-sm">
+          <Check size={14} className="text-studio-accent flex-shrink-0" />
+          <span className="text-studio-text">
+            {scanResult.added === 0
+              ? "No new journalists found"
+              : `Added ${scanResult.added} journalist${scanResult.added !== 1 ? "s" : ""}${scanResult.emails_found > 0 ? `, found ${scanResult.emails_found} email${scanResult.emails_found !== 1 ? "s" : ""}` : ""}`}
+          </span>
+          <button onClick={() => setScanResult(null)} className="text-studio-text-muted hover:text-studio-text ml-1">
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Paste panel */}
       {showPaste && (
