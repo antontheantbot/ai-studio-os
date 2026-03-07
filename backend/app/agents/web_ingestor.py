@@ -5,7 +5,6 @@ press coverage, and knowledge items relevant to digital installation art.
 """
 import json
 import logging
-import re
 from datetime import datetime
 
 from sqlalchemy import text
@@ -204,11 +203,11 @@ class WebIngestor:
     async def _extract(self, prompt: str, results_text: str) -> list[dict]:
         """Run Claude extraction on search results."""
         raw = await generate(prompt.format(results=results_text))
-        match = re.search(r"\[.*\]", raw, re.DOTALL)
-        if not match:
+        start, end = raw.find("["), raw.rfind("]")
+        if start == -1 or end == -1 or end <= start:
             return []
         try:
-            return json.loads(match.group())
+            return json.loads(raw[start:end + 1])
         except json.JSONDecodeError:
             return []
 

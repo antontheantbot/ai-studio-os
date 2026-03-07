@@ -6,7 +6,6 @@ Runs queries per category and saves new results to the database.
 import asyncio
 import json
 import logging
-import re
 from datetime import date
 
 from sqlalchemy import text
@@ -124,12 +123,12 @@ class TavilyScanner:
         )
 
         raw = await generate(EXTRACT_PROMPT.format(results=formatted))
-        match = re.search(r"\[.*\]", raw, re.DOTALL)
-        if not match:
+        start, end = raw.find("["), raw.rfind("]")
+        if start == -1 or end == -1 or end <= start:
             return 0, []
 
         try:
-            items = json.loads(match.group())
+            items = json.loads(raw[start:end + 1])
         except json.JSONDecodeError:
             return 0, []
 

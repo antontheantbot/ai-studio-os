@@ -8,7 +8,6 @@ all forms of contemporary art.
 import asyncio
 import json
 import logging
-import re
 from datetime import date
 
 import httpx
@@ -199,12 +198,12 @@ class OpportunityScanner:
 
         raw = await generate(EXTRACT_PROMPT.format(text=text_content))
 
-        match = re.search(r"\[.*\]", raw, re.DOTALL)
-        if not match:
+        start, end = raw.find("["), raw.rfind("]")
+        if start == -1 or end == -1 or end <= start:
             return 0
 
         try:
-            items = json.loads(match.group())
+            items = json.loads(raw[start:end + 1])
         except json.JSONDecodeError:
             logger.warning(f"[OpportunityScanner] JSON parse failed for {source['name']}")
             return 0
@@ -245,10 +244,10 @@ class OpportunityScanner:
 
         try:
             raw = await generate(TAVILY_EXTRACT_PROMPT.format(results=formatted))
-            match = re.search(r"\[.*\]", raw, re.DOTALL)
-            if not match:
+            start, end = raw.find("["), raw.rfind("]")
+            if start == -1 or end == -1 or end <= start:
                 return 0
-            items = json.loads(match.group())
+            items = json.loads(raw[start:end + 1])
             return await self._save_items(items)
         except Exception as e:
             logger.error(f"[OpportunityScanner] Tavily extraction failed: {e}")
