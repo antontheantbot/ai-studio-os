@@ -6,15 +6,12 @@ Runs queries per category and saves new results to the database.
 import asyncio
 import json
 import logging
-from datetime import date
 
-from sqlalchemy import text
 from tavily import AsyncTavilyClient
 
 from app.core.config import settings
-from app.db.session import AsyncSessionLocal
-from app.services.embeddings import embed
 from app.services.llm import generate
+from app.services.persistence import save_opportunities
 
 logger = logging.getLogger(__name__)
 
@@ -94,8 +91,7 @@ class TavilyScanner:
 
         for query, category in QUERIES:
             try:
-                count, urls = await self._search_and_save(query, category, seen_urls)
-                seen_urls.update(urls)
+                count = await self._search_and_save(query, category, seen_urls)
                 total += count
                 logger.info(f"[TavilyScanner] '{query}' [{category}]: {count} saved")
             except Exception as e:
@@ -105,7 +101,7 @@ class TavilyScanner:
         logger.info(f"[TavilyScanner] Total saved: {total}")
         return total
 
-    async def _search_and_save(self, query: str, category: str, seen_urls: set) -> tuple[int, list]:
+    async def _search_and_save(self, query: str, category: str, seen_urls: set) -> int:
         response = await self.client.search(
             query=query,
             search_depth="advanced",
@@ -115,7 +111,7 @@ class TavilyScanner:
 
         results = response.get("results", [])
         if not results:
-            return 0, []
+            return 0
 
         formatted = "\n\n".join(
             f"Title: {r.get('title', '')}\nURL: {r.get('url', '')}\nContent: {r.get('content', '')[:600]}"
@@ -125,76 +121,18 @@ class TavilyScanner:
         raw = await generate(EXTRACT_PROMPT.format(results=formatted))
         start, end = raw.find("["), raw.rfind("]")
         if start == -1 or end == -1 or end <= start:
-            return 0, []
+            return 0
 
         try:
             items = json.loads(raw[start:end + 1])
         except json.JSONDecodeError:
-            return 0, []
+            return 0
 
-        saved_urls: list = []
-        saved = await self._save_items(items, category, seen_urls, saved_urls)
-        return saved, saved_urls
+        # Tag each item with the query's category before saving
+        for item in items:
+            item["category"] = category
 
-    async def _save_items(self, items: list[dict], category: str, seen_urls: set, saved_urls: list) -> int:
-        saved = 0
-        async with AsyncSessionLocal() as db:
-            for item in items:
-                url = item.get("url")
-                if not item.get("title") or not url or url in seen_urls:
-                    continue
-
-                exists = await db.execute(
-                    text("SELECT id FROM opportunities WHERE url = :url"), {"url": url}
-                )
-                if exists.first():
-                    seen_urls.add(url)
-                    continue
-
-                embed_text = f"{item['title']}\n{item.get('description', '')}"
-                embedding = await embed(embed_text)
-                embedding_str = f"[{','.join(str(x) for x in embedding)}]"
-
-                await db.execute(
-                    text("""
-                        INSERT INTO opportunities
-                            (title, description, category, organizer, location, country,
-                             deadline, fee, award, url, tags, embedding)
-                        VALUES
-                            (:title, :description, :category, :organizer, :location, :country,
-                             :deadline, :fee, :award, :url, :tags, CAST(:embedding AS vector))
-                        ON CONFLICT (url) DO NOTHING
-                    """),
-                    {
-                        "title": item.get("title"),
-                        "description": item.get("description"),
-                        "category": category,
-                        "organizer": item.get("organizer"),
-                        "location": item.get("location"),
-                        "country": item.get("country"),
-                        "deadline": _parse_deadline(item.get("deadline")),
-                        "fee": item.get("fee"),
-                        "award": item.get("award"),
-                        "url": url,
-                        "tags": item.get("tags", []),
-                        "embedding": embedding_str,
-                    },
-                )
-                saved += 1
-                seen_urls.add(url)
-                saved_urls.append(url)
-
-            await db.commit()
-        return saved
-
-
-def _parse_deadline(raw: str | None) -> date | None:
-    if not raw:
-        return None
-    try:
-        return date.fromisoformat(raw[:10])
-    except (ValueError, TypeError):
-        return None
+        return await save_opportunities(items, seen_urls=seen_urls)
 
 
 _scanner = TavilyScanner()

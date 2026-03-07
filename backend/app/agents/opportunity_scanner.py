@@ -8,7 +8,6 @@ all forms of contemporary art.
 import asyncio
 import json
 import logging
-from datetime import date
 
 import httpx
 from bs4 import BeautifulSoup
@@ -17,8 +16,8 @@ from tavily import AsyncTavilyClient
 
 from app.core.config import settings
 from app.db.session import AsyncSessionLocal
-from app.services.embeddings import embed
 from app.services.llm import generate
+from app.services.persistence import save_opportunities
 
 logger = logging.getLogger(__name__)
 
@@ -157,15 +156,6 @@ async def fetch_text(url: str, timeout: int = 25) -> str:
         return "\n".join(lines)
 
 
-def parse_deadline(raw: str | None) -> date | None:
-    if not raw:
-        return None
-    try:
-        return date.fromisoformat(raw[:10])
-    except (ValueError, TypeError):
-        return None
-
-
 class OpportunityScanner:
     def __init__(self):
         self._tavily = AsyncTavilyClient(api_key=settings.TAVILY_API_KEY)
@@ -211,7 +201,7 @@ class OpportunityScanner:
         for item in items:
             item.setdefault("category", source["category"])
 
-        return await self._save_items(items)
+        return await save_opportunities(items)
 
     async def _tavily_scan(self) -> int:
         all_results = []
@@ -248,57 +238,10 @@ class OpportunityScanner:
             if start == -1 or end == -1 or end <= start:
                 return 0
             items = json.loads(raw[start:end + 1])
-            return await self._save_items(items)
+            return await save_opportunities(items)
         except Exception as e:
             logger.error(f"[OpportunityScanner] Tavily extraction failed: {e}")
             return 0
-
-    async def _save_items(self, items: list[dict]) -> int:
-        saved = 0
-        async with AsyncSessionLocal() as db:
-            for item in items:
-                if not item.get("title") or not item.get("url"):
-                    continue
-
-                exists = await db.execute(
-                    text("SELECT id FROM opportunities WHERE url = :url"),
-                    {"url": item["url"]},
-                )
-                if exists.first():
-                    continue
-
-                embed_text = f"{item['title']}\n{item.get('description', '')}"
-                embedding = await embed(embed_text)
-                embedding_str = f"[{','.join(str(x) for x in embedding)}]"
-
-                await db.execute(
-                    text("""
-                        INSERT INTO opportunities
-                            (title, description, category, organizer, location, country,
-                             deadline, fee, award, url, tags, embedding)
-                        VALUES
-                            (:title, :description, :category, :organizer, :location, :country,
-                             :deadline, :fee, :award, :url, :tags, CAST(:embedding AS vector))
-                        ON CONFLICT (url) DO NOTHING
-                    """),
-                    {
-                        "title": item.get("title"),
-                        "description": item.get("description"),
-                        "category": item.get("category", "open_call"),
-                        "organizer": item.get("organizer"),
-                        "location": item.get("location"),
-                        "country": item.get("country"),
-                        "deadline": parse_deadline(item.get("deadline")),
-                        "fee": item.get("fee"),
-                        "award": item.get("award"),
-                        "url": item.get("url"),
-                        "tags": item.get("tags", []),
-                        "embedding": embedding_str,
-                    },
-                )
-                saved += 1
-            await db.commit()
-        return saved
 
 
 _scanner = OpportunityScanner()
