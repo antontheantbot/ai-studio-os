@@ -1,11 +1,11 @@
 "use client";
 import { useState } from "react";
 import useSWR from "swr";
-import { BookOpen, Plus, X } from "lucide-react";
+import { BookOpen, Plus, Trash2, X } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import SearchBar from "@/components/SearchBar";
 import EmptyState from "@/components/EmptyState";
-import { getKnowledge, searchKnowledge, createNote, type KnowledgeItem } from "@/lib/api";
+import { getKnowledge, searchKnowledge, createNote, deleteKnowledge, type KnowledgeItem } from "@/lib/api";
 
 const SOURCE_COLORS: Record<string, string> = {
   note: "text-studio-accent",
@@ -115,6 +115,16 @@ export default function KnowledgePage() {
                   <span className={`text-xs ${SOURCE_COLORS[k.source_type] ?? "text-studio-text-muted"}`}>
                     {k.source_type}
                   </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteKnowledge(k.id).then(() => mutate());
+                    }}
+                    className="text-studio-border hover:text-red-400 transition-colors"
+                    title="Delete"
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               </div>
               <p className={`text-xs text-studio-text-muted mb-2 whitespace-pre-wrap ${isExpanded ? "" : "line-clamp-3"}`}>

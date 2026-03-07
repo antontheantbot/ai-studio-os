@@ -58,6 +58,16 @@ async def list_knowledge(
     return [dict(r._mapping) for r in result]
 
 
+@router.delete("/{item_id}")
+async def delete_knowledge(item_id: str, db: AsyncSession = Depends(get_db)):
+    await db.execute(
+        sa.text("DELETE FROM knowledge_items WHERE id = :id"),
+        {"id": item_id},
+    )
+    await db.commit()
+    return {"deleted": item_id}
+
+
 @router.post("/scan")
 async def scan(background_tasks: BackgroundTasks):
     """Trigger a live web scan for new knowledge using Tavily."""

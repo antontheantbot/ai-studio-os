@@ -56,6 +56,9 @@ export const createNote = (body: { title: string; content: string; tags: string[
     body: JSON.stringify(body),
   });
 
+export const deleteKnowledge = (id: string) =>
+  request<{ deleted: string }>(`/knowledge/${id}`, { method: "DELETE" });
+
 // ── Artists ──────────────────────────────────────────────────────────────────
 export const getArtists = (q?: string) =>
   request<Artist[]>(`/artists/${q ? `?q=${encodeURIComponent(q)}` : ""}`);
