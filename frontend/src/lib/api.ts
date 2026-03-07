@@ -114,7 +114,7 @@ export const scanMarket = () => request<{ status: string }>("/briefs/scan", { me
 
 // ── Journalists ───────────────────────────────────────────────────────────────
 export const getJournalists = (q?: string) =>
-  request<Journalist[]>(`/journalists/?limit=1000${q ? `&q=${encodeURIComponent(q)}` : ""}`);
+  request<Journalist[]>(`/journalists/?limit=10000${q ? `&q=${encodeURIComponent(q)}` : ""}`);
 export const scanJournalists = () =>
   request<{ status: string }>("/journalists/scan", { method: "POST" });
 export const addJournalistsFromText = (text: string) =>
