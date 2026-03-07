@@ -20,6 +20,7 @@ export default function KnowledgePage() {
   const [showAdd, setShowAdd] = useState(false);
   const [note, setNote] = useState({ title: "", content: "", tags: "" });
   const [saving, setSaving] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data: all, mutate } = useSWR("knowledge", getKnowledge);
   const { data: results, isLoading } = useSWR(
@@ -97,32 +98,39 @@ export default function KnowledgePage() {
       )}
 
       <div className="space-y-3">
-        {items.map((k: KnowledgeItem) => (
-          <div key={k.id} className="card hover:border-studio-muted transition-colors">
-            <div className="flex items-start justify-between gap-4 mb-2">
-              <h3 className="text-sm font-medium text-studio-text">{k.title}</h3>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {k.similarity !== undefined && (
-                  <span className="text-xs text-studio-accent">{(k.similarity * 100).toFixed(0)}%</span>
-                )}
-                <span className={`text-xs ${SOURCE_COLORS[k.source_type] ?? "text-studio-text-muted"}`}>
-                  {k.source_type}
-                </span>
+        {items.map((k: KnowledgeItem) => {
+          const isExpanded = expandedId === k.id;
+          return (
+            <div
+              key={k.id}
+              className="card hover:border-studio-muted transition-colors cursor-pointer"
+              onClick={() => setExpandedId(isExpanded ? null : k.id)}
+            >
+              <div className="flex items-start justify-between gap-4 mb-2">
+                <h3 className="text-sm font-medium text-studio-text">{k.title}</h3>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {k.similarity !== undefined && (
+                    <span className="text-xs text-studio-accent">{(k.similarity * 100).toFixed(0)}%</span>
+                  )}
+                  <span className={`text-xs ${SOURCE_COLORS[k.source_type] ?? "text-studio-text-muted"}`}>
+                    {k.source_type}
+                  </span>
+                </div>
+              </div>
+              <p className={`text-xs text-studio-text-muted mb-2 whitespace-pre-wrap ${isExpanded ? "" : "line-clamp-3"}`}>
+                {isExpanded ? (k.content || k.summary) : (k.summary || k.content)}
+              </p>
+              {k.tags?.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {k.tags.slice(0, 6).map((t) => <span key={t} className="tag">{t}</span>)}
+                </div>
+              )}
+              <div className="text-xs text-studio-border mt-2">
+                {new Date(k.created_at).toLocaleDateString()}
               </div>
             </div>
-            <p className="text-xs text-studio-text-muted line-clamp-3 mb-2">
-              {k.summary || k.content}
-            </p>
-            {k.tags?.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {k.tags.slice(0, 6).map((t) => <span key={t} className="tag">{t}</span>)}
-              </div>
-            )}
-            <div className="text-xs text-studio-border mt-2">
-              {new Date(k.created_at).toLocaleDateString()}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
