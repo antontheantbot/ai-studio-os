@@ -35,7 +35,7 @@ Text to parse:
 @router.get("/")
 async def list_journalists(
     q: str | None = Query(None),
-    limit: int = Query(50, le=200),
+    limit: int = Query(500, le=1000),
     db: AsyncSession = Depends(get_db),
 ):
     if q:
