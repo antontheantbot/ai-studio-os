@@ -290,7 +290,7 @@ class WebIngestor:
         return total
 
     async def _save_collectors(self, items: list[dict], seen: set) -> int:
-        import json as _json
+
         saved = 0
         async with AsyncSessionLocal() as db:
             for item in items:
@@ -323,7 +323,7 @@ class WebIngestor:
                     "known_works": item.get("known_works", []),
                     "institutions": item.get("institutions", []),
                     "notes": item.get("notes"),
-                    "social_links": _json.dumps({}),
+                    "social_links": json.dumps({}),
                     "embedding": embedding_str,
                 })
                 saved += 1
@@ -348,7 +348,7 @@ class WebIngestor:
         return total
 
     async def _save_curators(self, items: list[dict], seen: set) -> int:
-        import json as _json
+
         saved = 0
         async with AsyncSessionLocal() as db:
             for item in items:
@@ -383,7 +383,7 @@ class WebIngestor:
                     "focus_areas": item.get("focus_areas", []),
                     "notable_shows": item.get("notable_shows", []),
                     "notes": item.get("notes"),
-                    "social_links": _json.dumps({}),
+                    "social_links": json.dumps({}),
                     "embedding": embedding_str,
                 })
                 saved += 1
@@ -514,7 +514,7 @@ class WebIngestor:
     # ─── Journalists ─────────────────────────────────────────────────────────
 
     async def scan_journalists(self) -> int:
-        import json as _json
+
         total = 0
         seen_names: set = set()
         for query in JOURNALIST_QUERIES:
@@ -529,7 +529,7 @@ class WebIngestor:
         return total
 
     async def _save_journalists(self, items: list[dict], seen: set) -> int:
-        import json as _json
+
         saved = 0
         async with AsyncSessionLocal() as db:
             for item in items:
@@ -555,10 +555,10 @@ class WebIngestor:
                 """), {
                     "name": name,
                     "bio": item.get("bio"),
-                    "publications": _json.dumps(item.get("publications") or []),
-                    "beats": _json.dumps(item.get("beats") or []),
+                    "publications": json.dumps(item.get("publications") or []),
+                    "beats": json.dumps(item.get("beats") or []),
                     "email": item.get("email"),
-                    "social_links": _json.dumps(item.get("social_links") or {}),
+                    "social_links": json.dumps(item.get("social_links") or {}),
                     "location": item.get("location"),
                     "country": item.get("country"),
                     "notes": item.get("notes"),
