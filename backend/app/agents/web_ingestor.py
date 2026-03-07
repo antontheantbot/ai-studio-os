@@ -568,6 +568,85 @@ class WebIngestor:
             await db.commit()
         return saved
 
+    # ─── Journalist enrichment ───────────────────────────────────────────────
+
+    async def enrich_journalists(self, batch_size: int = 20) -> int:
+        """
+        For journalists missing email/contact info, search the web and update them.
+        Processes up to batch_size journalists per run, oldest-first.
+        Never removes existing data — only fills in null fields.
+        """
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(text("""
+                SELECT id, name, publications, beats
+                FROM journalists
+                WHERE email IS NULL
+                ORDER BY created_at ASC
+                LIMIT :limit
+            """), {"limit": batch_size})
+            rows = [dict(r._mapping) for r in result]
+
+        updated = 0
+        for row in rows:
+            try:
+                name = row["name"]
+                pubs = (row.get("publications") or [])
+                pub_hint = pubs[0] if pubs else "art"
+                query = f'"{name}" journalist email contact {pub_hint}'
+                results_text = await self._search(query, max_results=5)
+
+                prompt = f"""From these search results, extract contact information for the journalist "{name}".
+Return a JSON object with these fields (null if not found):
+- email (string, publicly listed email address — only if clearly public)
+- social_links (object with any of: twitter, instagram, linkedin, website — full URLs)
+
+Return only a single JSON object, not an array. Return {{}} if nothing found.
+
+Search results:
+{results_text}"""
+
+                raw = await generate(prompt)
+                start = raw.find("{")
+                end = raw.rfind("}")
+                if start == -1 or end == -1 or end <= start:
+                    continue
+                try:
+                    contact = json.loads(raw[start:end + 1])
+                except json.JSONDecodeError:
+                    continue
+
+                email = (contact.get("email") or "").strip() or None
+                social = contact.get("social_links") or {}
+
+                if not email and not social:
+                    continue
+
+                async with AsyncSessionLocal() as db:
+                    await db.execute(text("""
+                        UPDATE journalists
+                        SET
+                            email = COALESCE(email, :email),
+                            social_links = CASE
+                                WHEN social_links = '{}'::jsonb OR social_links IS NULL
+                                THEN CAST(:social_links AS jsonb)
+                                ELSE social_links
+                            END
+                        WHERE id = :id
+                    """), {
+                        "id": str(row["id"]),
+                        "email": email,
+                        "social_links": json.dumps(social),
+                    })
+                    await db.commit()
+
+                updated += 1
+                logger.info(f"[WebIngestor/Enrich] Updated contact info for {name}: email={email}")
+            except Exception as e:
+                logger.error(f"[WebIngestor/Enrich] Failed enriching {row.get('name')}: {e}")
+
+        logger.info(f"[WebIngestor/Enrich] Enriched {updated}/{len(rows)} journalists")
+        return updated
+
     # ─── Run all ─────────────────────────────────────────────────────────────
 
     async def run_all(self) -> dict:
@@ -622,3 +701,7 @@ async def scan_knowledge() -> int:
 
 async def scan_journalists() -> int:
     return await _ingestor.scan_journalists()
+
+
+async def enrich_journalists() -> int:
+    return await _ingestor.enrich_journalists()

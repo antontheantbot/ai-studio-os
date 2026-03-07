@@ -58,3 +58,25 @@ def ingest_knowledge(self, url: str):
         return {"status": "ok", "item_id": result}
     except Exception as exc:
         raise self.retry(exc=exc, countdown=30)
+
+
+@celery_app.task(name="tasks.scan_journalists", bind=True, max_retries=3)
+def scan_journalists(self):
+    """Daily scan: find new journalists covering art/culture and add them (never remove)."""
+    try:
+        from app.agents.web_ingestor import scan_journalists as _scan
+        result = _run(_scan())
+        return {"status": "ok", "added": result}
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60)
+
+
+@celery_app.task(name="tasks.enrich_journalists", bind=True, max_retries=3)
+def enrich_journalists(self):
+    """Daily enrichment: search for email/contact info for journalists who are missing it."""
+    try:
+        from app.agents.web_ingestor import enrich_journalists as _enrich
+        result = _run(_enrich())
+        return {"status": "ok", "enriched": result}
+    except Exception as exc:
+        raise self.retry(exc=exc, countdown=60)

@@ -38,4 +38,14 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.scout_architecture",
         "schedule": crontab(hour=7, minute=0, day_of_week=1),
     },
+    # Daily at 10:00 UTC — find new journalists covering art/culture (add-only)
+    "scan-journalists-daily": {
+        "task": "tasks.scan_journalists",
+        "schedule": crontab(hour=10, minute=0),
+    },
+    # Daily at 11:00 UTC — enrich up to 20 journalists with email/contact info
+    "enrich-journalists-daily": {
+        "task": "tasks.enrich_journalists",
+        "schedule": crontab(hour=11, minute=0),
+    },
 }
