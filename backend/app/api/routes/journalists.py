@@ -137,3 +137,11 @@ async def scan(background_tasks: BackgroundTasks):
     from app.agents.web_ingestor import scan_journalists
     background_tasks.add_task(scan_journalists)
     return {"status": "scanning", "message": "Scanning for journalists — check back in ~2 minutes"}
+
+
+@router.post("/enrich")
+async def enrich(background_tasks: BackgroundTasks):
+    """Search for email/contact info for journalists missing it (up to 20 per run)."""
+    from app.agents.web_ingestor import enrich_journalists
+    background_tasks.add_task(enrich_journalists)
+    return {"status": "enriching", "message": "Enriching journalist contacts — check back in ~3 minutes"}
