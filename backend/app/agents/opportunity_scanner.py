@@ -145,7 +145,7 @@ HEADERS = {
 async def fetch_text(url: str, timeout: int = 25) -> str:
     """Fetch and extract visible text from a URL using httpx + BeautifulSoup."""
     async with httpx.AsyncClient(
-        headers=HEADERS, follow_redirects=True, timeout=timeout, verify=False
+        headers=HEADERS, follow_redirects=True, timeout=timeout
     ) as client:
         response = await client.get(url)
         response.raise_for_status()
