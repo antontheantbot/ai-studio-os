@@ -51,11 +51,29 @@ async def chat(req: ChatMessage, db: AsyncSession = Depends(get_db)):
         context_parts.append(block)
         all_sources.extend(o["title"] for o in opps)
 
-    # Journalists
-    journalists = await vector_search(
-        db, "journalists", req.message, limit=3,
-        return_cols="name, publications, beats, email, location"
-    )
+    # Journalists (no embedding column — extract keywords and use ILIKE)
+    try:
+        # Pull a few words from the query to search; fall back to all journalists
+        words = [w for w in req.message.split() if len(w) > 3]
+        pattern = f"%{words[0]}%" if words else "%%"
+        j_result = await db.execute(
+            text("""
+                SELECT name, publications, beats, email, location
+                FROM journalists
+                WHERE name ILIKE :q OR bio ILIKE :q OR publications::text ILIKE :q OR beats::text ILIKE :q
+                ORDER BY name LIMIT 3
+            """),
+            {"q": pattern},
+        )
+        journalists = [dict(r._mapping) for r in j_result]
+        # If keyword search returned nothing, fall back to most recent entries
+        if not journalists:
+            j_result = await db.execute(
+                text("SELECT name, publications, beats, email, location FROM journalists ORDER BY created_at DESC LIMIT 3")
+            )
+            journalists = [dict(r._mapping) for r in j_result]
+    except Exception:
+        journalists = []
     if journalists:
         block = "JOURNALISTS IN DATABASE:\n" + "\n".join(
             f"- {j['name']} ({j.get('location', '')}): writes for {j.get('publications', [])}, beats: {j.get('beats', [])}, email: {j.get('email', 'n/a')}"
