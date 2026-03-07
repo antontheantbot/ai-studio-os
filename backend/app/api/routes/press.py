@@ -10,6 +10,8 @@ from app.services.embeddings import embed
 
 router = APIRouter()
 
+_COLS = "id, title, content, summary, source, author, url, published_at, category, tags, mentioned_artists, created_at, updated_at"
+
 
 class PressCreate(BaseModel):
     title: str
@@ -32,10 +34,10 @@ async def list_press(
     db: AsyncSession = Depends(get_db),
 ):
     if q and mode == "semantic":
-        return await vector_search(db, "press_items", q, limit=limit)
+        return await vector_search(db, "press_items", q, limit=limit, return_cols=_COLS)
     if q and mode == "keyword":
-        return await keyword_search(db, "press_items", q, search_col="title || ' ' || COALESCE(content, '')", limit=limit)
-    result = await db.execute(sa.text("SELECT * FROM press_items ORDER BY published_at DESC LIMIT :limit"), {"limit": limit})
+        return await keyword_search(db, "press_items", q, search_col="title || ' ' || COALESCE(content, '')", limit=limit, return_cols=_COLS)
+    result = await db.execute(sa.text(f"SELECT {_COLS} FROM press_items ORDER BY published_at DESC LIMIT :limit"), {"limit": limit})
     return [dict(r._mapping) for r in result]
 
 

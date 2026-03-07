@@ -9,6 +9,8 @@ from app.services.embeddings import embed
 
 router = APIRouter()
 
+_COLS = "id, name, bio, institution, role, location, country, focus_areas, notable_shows, contact_email, contact_url, social_links, notes, created_at, updated_at"
+
 
 class CuratorCreate(BaseModel):
     name: str
@@ -32,14 +34,14 @@ async def list_curators(
     db: AsyncSession = Depends(get_db),
 ):
     if q:
-        return await vector_search(db, "curators", q, limit=limit)
-    result = await db.execute(sa.text("SELECT * FROM curators ORDER BY name LIMIT :limit"), {"limit": limit})
+        return await vector_search(db, "curators", q, limit=limit, return_cols=_COLS)
+    result = await db.execute(sa.text(f"SELECT {_COLS} FROM curators ORDER BY name LIMIT :limit"), {"limit": limit})
     return [dict(r._mapping) for r in result]
 
 
 @router.get("/{curator_id}")
 async def get_curator(curator_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(sa.text("SELECT * FROM curators WHERE id = :id"), {"id": curator_id})
+    result = await db.execute(sa.text(f"SELECT {_COLS} FROM curators WHERE id = :id"), {"id": curator_id})
     row = result.first()
     return dict(row._mapping) if row else {"error": "not found"}
 

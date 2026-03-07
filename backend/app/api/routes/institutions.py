@@ -6,6 +6,8 @@ from app.services.search import vector_search
 
 router = APIRouter()
 
+_COLS = "id, name, city, country, type, website, focus_areas, annual_budget, digital_art_program, notes, created_at, updated_at"
+
 
 @router.get("/")
 async def list_institutions(
@@ -17,9 +19,9 @@ async def list_institutions(
 ):
     """List institutions with optional filters."""
     if q:
-        return await vector_search(db, "institutions", q, limit)
+        return await vector_search(db, "institutions", q, limit, return_cols=_COLS)
 
-    query = "SELECT * FROM institutions WHERE 1=1"
+    query = f"SELECT {_COLS} FROM institutions WHERE 1=1"
     params = {"limit": limit}
 
     if type:

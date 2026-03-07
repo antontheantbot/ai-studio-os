@@ -10,6 +10,8 @@ from app.services.embeddings import embed
 
 router = APIRouter()
 
+_COLS = "id, title, description, category, organizer, location, country, deadline, fee, award, url, tags, is_active, created_at, updated_at, fit_score, digital_art_relevance, installation_scale, architecture_relevance"
+
 
 class OpportunityCreate(BaseModel):
     title: str
@@ -33,8 +35,8 @@ async def list_opportunities(
     db: AsyncSession = Depends(get_db),
 ):
     if q:
-        return await vector_search(db, "opportunities", q, limit=limit)
-    query = "SELECT * FROM opportunities"
+        return await vector_search(db, "opportunities", q, limit=limit, return_cols=_COLS)
+    query = f"SELECT {_COLS} FROM opportunities"
     params = {"limit": limit}
     if upcoming_only:
         query += " WHERE deadline IS NULL OR deadline >= CURRENT_DATE"

@@ -9,6 +9,8 @@ from app.services.embeddings import embed
 
 router = APIRouter()
 
+_COLS = "id, name, bio, location, country, interests, known_works, institutions, contact_email, contact_url, social_links, notes, created_at, updated_at, price_range, museum_boards"
+
 
 class CollectorCreate(BaseModel):
     name: str
@@ -31,14 +33,14 @@ async def list_collectors(
     db: AsyncSession = Depends(get_db),
 ):
     if q:
-        return await vector_search(db, "collectors", q, limit=limit)
-    result = await db.execute(sa.text("SELECT * FROM collectors ORDER BY name LIMIT :limit"), {"limit": limit})
+        return await vector_search(db, "collectors", q, limit=limit, return_cols=_COLS)
+    result = await db.execute(sa.text(f"SELECT {_COLS} FROM collectors ORDER BY name LIMIT :limit"), {"limit": limit})
     return [dict(r._mapping) for r in result]
 
 
 @router.get("/{collector_id}")
 async def get_collector(collector_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(sa.text("SELECT * FROM collectors WHERE id = :id"), {"id": collector_id})
+    result = await db.execute(sa.text(f"SELECT {_COLS} FROM collectors WHERE id = :id"), {"id": collector_id})
     row = result.first()
     return dict(row._mapping) if row else {"error": "not found"}
 

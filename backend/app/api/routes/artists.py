@@ -8,6 +8,8 @@ from app.services.embeddings import embed
 
 router = APIRouter()
 
+_COLS = "id, name, country, city, bio, medium, website, instagram, represented_by, created_at, updated_at"
+
 
 class ArtistCreate(BaseModel):
     name: str
@@ -28,10 +30,10 @@ async def list_artists(
 ):
     """List all artists or search semantically."""
     if q:
-        return await vector_search(db, "artists", q, limit)
+        return await vector_search(db, "artists", q, limit, return_cols=_COLS)
 
     result = await db.execute(
-        text("SELECT * FROM artists ORDER BY created_at DESC LIMIT :limit"),
+        text(f"SELECT {_COLS} FROM artists ORDER BY created_at DESC LIMIT :limit"),
         {"limit": limit}
     )
     return [dict(row._mapping) for row in result.fetchall()]
@@ -64,7 +66,7 @@ async def create_artist(a: ArtistCreate, db: AsyncSession = Depends(get_db)):
 async def get_artist(artist_id: str, db: AsyncSession = Depends(get_db)):
     """Get a single artist with their relationships."""
     result = await db.execute(
-        text("SELECT * FROM artists WHERE id = :id"),
+        text(f"SELECT {_COLS} FROM artists WHERE id = :id"),
         {"id": artist_id}
     )
     artist = result.fetchone()

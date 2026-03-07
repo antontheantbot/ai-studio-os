@@ -5,6 +5,8 @@ from app.services.search import vector_search
 
 router = APIRouter()
 
+_COLS = "id, name, description, architect, city, country, coordinates, style, year_built, suitability, image_urls, source_url, created_at, updated_at, photography_score, access_risk, historical_significance, architecture_uniqueness"
+
 
 @router.get("/")
 async def list_locations(
@@ -13,8 +15,8 @@ async def list_locations(
     db: AsyncSession = Depends(get_db),
 ):
     if q:
-        return await vector_search(db, "architecture_locations", q, limit=limit)
-    result = await db.execute(__import__("sqlalchemy").text("SELECT * FROM architecture_locations ORDER BY created_at DESC LIMIT :limit"), {"limit": limit})
+        return await vector_search(db, "architecture_locations", q, limit=limit, return_cols=_COLS)
+    result = await db.execute(__import__("sqlalchemy").text(f"SELECT {_COLS} FROM architecture_locations ORDER BY created_at DESC LIMIT :limit"), {"limit": limit})
     return [dict(r._mapping) for r in result]
 
 
