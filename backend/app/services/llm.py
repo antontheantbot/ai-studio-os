@@ -20,6 +20,12 @@ async def chat(messages: list[dict], system: str = SYSTEM_PROMPT) -> str:
     return response.content[0].text
 
 
-async def generate(prompt: str, system: str = SYSTEM_PROMPT) -> str:
+async def generate(prompt: str, system: str = SYSTEM_PROMPT, max_tokens: int = 2048) -> str:
     """Single-turn generation helper."""
-    return await chat([{"role": "user", "content": prompt}], system=system)
+    response = await client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=max_tokens,
+        system=system,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return response.content[0].text

@@ -18,37 +18,40 @@ logger = logging.getLogger(__name__)
 
 # ─── Parse prompt ─────────────────────────────────────────────────────────────
 
-PARSE_PROMPT = """You are parsing contact information for an art world CRM used by a professional artist studio.
+PARSE_PROMPT = """You are extracting contact information from pasted text for an art world CRM.
 
-Analyze the pasted text and extract ALL contacts found. For each contact determine the category and extract all available fields.
+Your job is to find EVERY person or organisation mentioned and return them as structured JSON.
 
-Return a JSON array. Each object must have:
-- category: one of "curator", "journalist", "institution", "collector", "corporation", or "unknown" if you genuinely cannot tell
-- uncertain: boolean — true if you are not confident about the category assignment
-- name: string (required — person name or organisation name)
-- role: string or null (job title, e.g. "Senior Curator", "Director", "Editor")
-- organization: string or null (employer / gallery / publication / institution)
+CRITICAL RULES:
+1. Extract EVERY name you can find — do not skip anyone
+2. Never return [] unless the text is literally empty or gibberish with no names at all
+3. If you cannot determine the category, still include the contact with uncertain=true
+4. A name alone is enough — you don't need email/role/org to include someone
+5. Organisations (galleries, museums, companies) count as contacts too
+
+Return a JSON array where each object has:
+- category: "curator" | "journalist" | "institution" | "collector" | "corporation" | "unknown"
+- uncertain: true if you are not confident about the category
+- name: string (REQUIRED)
+- role: string or null
+- organization: string or null
 - email: string or null
 - phone: string or null
 - website: string or null
 - location: string or null (city)
 - country: string or null
-- bio: string or null (2–3 sentences)
-- social_links: object (any of: twitter, instagram, linkedin, website — full URLs)
-- tags: array of strings (topics, interests, focus areas)
+- bio: string or null
+- social_links: object (twitter/instagram/linkedin/website)
+- tags: string[]
 - notes: string or null
 
-Categorisation rules:
-- curator: works at a museum/gallery, curates exhibitions
-- journalist: writer/critic/editor for art publications or press
-- institution: museum, gallery, kunsthalle, foundation, biennial (use org name)
+Category guide:
+- curator: works at museum/gallery, curates shows
+- journalist: writer/critic/editor for art press
+- institution: museum, gallery, foundation, biennial, kunsthalle
 - collector: private art collector or patron
-- corporation: company, brand, PR agency, sponsor, tech firm, luxury brand
-- unknown: use this if there is genuinely not enough information to determine the category
-
-IMPORTANT: Never drop a contact because you are unsure of the category. Always include it with uncertain=true and category="unknown" (or your best guess).
-
-If the text contains multiple contacts return all of them. Return [] if nothing parseable.
+- corporation: company, brand, PR agency, sponsor, luxury brand
+- unknown: not enough info — still include them
 
 Text to parse:
 {text}"""
@@ -88,20 +91,21 @@ async def parse_contacts(body: ParseBody):
     if not body.text.strip():
         return {"contacts": []}
 
-    raw = await generate(PARSE_PROMPT.format(text=body.text[:10000]))
+    raw = await generate(PARSE_PROMPT.format(text=body.text[:10000]), max_tokens=8192)
+    logger.info(f"[Contacts/parse] Raw LLM response (first 500 chars): {raw[:500]}")
     raw = re.sub(r"```(?:json)?\s*", "", raw).strip()
 
     start = raw.find("[")
     end = raw.rfind("]")
     if start == -1 or end == -1 or end <= start:
-        logger.error(f"[Contacts/parse] No JSON array: {raw[:300]}")
-        return {"contacts": []}
+        logger.error(f"[Contacts/parse] No JSON array found in response: {raw[:500]}")
+        return {"contacts": [], "error": "Could not extract contacts — try rephrasing or adding more detail"}
 
     try:
         items = json.loads(raw[start:end + 1])
     except json.JSONDecodeError as e:
-        logger.error(f"[Contacts/parse] JSON decode error: {e}")
-        return {"contacts": []}
+        logger.error(f"[Contacts/parse] JSON decode error: {e} | raw: {raw[start:end+1][:300]}")
+        return {"contacts": [], "error": "Parsing failed — try again or simplify the text"}
 
     # Normalise and validate
     contacts = []

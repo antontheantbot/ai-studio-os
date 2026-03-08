@@ -46,11 +46,19 @@ class PasteBody(BaseModel):
 @router.get("/")
 async def list_corporations(
     q: str | None = Query(None),
-    limit: int = Query(100, le=500),
+    limit: int = Query(5000, le=5000),
     db: AsyncSession = Depends(get_db),
 ):
     if q:
-        return await vector_search(db, "corporations", q, limit=limit, return_cols=_COLS)
+        result = await db.execute(
+            sa.text(f"""
+                SELECT {_COLS} FROM corporations
+                WHERE name ILIKE :q OR type ILIKE :q OR contact_name ILIKE :q
+                   OR city ILIKE :q OR country ILIKE :q OR notes ILIKE :q
+                ORDER BY name LIMIT :limit
+            """), {"q": f"%{q}%", "limit": limit}
+        )
+        return [dict(r._mapping) for r in result]
     result = await db.execute(
         sa.text(f"SELECT {_COLS} FROM corporations ORDER BY name LIMIT :limit"), {"limit": limit}
     )

@@ -129,11 +129,17 @@ class CollectorCreate(BaseModel):
 @router.get("/")
 async def list_collectors(
     q: str | None = Query(None),
-    limit: int = Query(20, le=100),
+    limit: int = Query(1000, le=5000),
     db: AsyncSession = Depends(get_db),
 ):
     if q:
-        return await vector_search(db, "collectors", q, limit=limit, return_cols=_COLS)
+        result = await db.execute(sa.text(f"""
+            SELECT {_COLS} FROM collectors
+            WHERE name ILIKE :q OR location ILIKE :q OR country ILIKE :q
+               OR bio ILIKE :q OR notes ILIKE :q
+            ORDER BY name LIMIT :limit
+        """), {"q": f"%{q}%", "limit": limit})
+        return [dict(r._mapping) for r in result]
     result = await db.execute(sa.text(f"SELECT {_COLS} FROM collectors ORDER BY name LIMIT :limit"), {"limit": limit})
     return [dict(r._mapping) for r in result]
 

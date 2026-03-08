@@ -106,12 +106,18 @@ async def list_institutions(
     q: str = Query(default=None),
     type: str = Query(default=None),
     digital_only: bool = Query(default=False),
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=1000, le=5000),
     db: AsyncSession = Depends(get_db),
 ):
     """List institutions with optional filters."""
     if q:
-        return await vector_search(db, "institutions", q, limit, return_cols=_COLS)
+        result = await db.execute(text(f"""
+            SELECT {_COLS} FROM institutions
+            WHERE name ILIKE :q OR city ILIKE :q OR country ILIKE :q
+               OR type ILIKE :q OR notes ILIKE :q
+            ORDER BY name LIMIT :limit
+        """), {"q": f"%{q}%", "limit": limit})
+        return [dict(row._mapping) for row in result.fetchall()]
 
     query = f"SELECT {_COLS} FROM institutions WHERE 1=1"
     params = {"limit": limit}

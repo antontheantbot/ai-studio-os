@@ -124,7 +124,7 @@ export const scanMarket = () => request<{ status: string }>("/briefs/scan", { me
 
 // ── Journalists ───────────────────────────────────────────────────────────────
 export const getJournalists = (q?: string) =>
-  request<Journalist[]>(`/journalists/?limit=10000${q ? `&q=${encodeURIComponent(q)}` : ""}`);
+  request<Journalist[]>(`/journalists/${q ? `?q=${encodeURIComponent(q)}` : ""}`);
 export const scanJournalists = () =>
   request<{ status: string; added: number; emails_found: number }>("/journalists/scan", { method: "POST" });
 export const addJournalistsFromText = (text: string) =>
@@ -153,7 +153,7 @@ export const scanCorporations = () =>
 
 // ── Unified Contacts ──────────────────────────────────────────────────────────
 export const parseContacts = (text: string) =>
-  request<{ contacts: ParsedContact[] }>("/contacts/parse", {
+  request<{ contacts: ParsedContact[]; error?: string }>("/contacts/parse", {
     method: "POST",
     body: JSON.stringify({ text }),
   });

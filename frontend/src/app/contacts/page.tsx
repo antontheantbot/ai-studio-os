@@ -289,6 +289,7 @@ export default function ContactsPage() {
   const [pasteText, setPasteText] = useState("");
   const [parsing, setParsing] = useState(false);
   const [parsedContacts, setParsedContacts] = useState<ParsedContact[] | null>(null);
+  const [parseError, setParseError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveResult, setSaveResult] = useState<{ message: string } | null>(null);
 
@@ -338,10 +339,15 @@ export default function ContactsPage() {
     if (!pasteText.trim()) return;
     setParsing(true);
     setParsedContacts(null);
+    setParseError(null);
     setSaveResult(null);
     try {
       const res = await parseContacts(pasteText);
-      setParsedContacts(res.contacts);
+      if (res.contacts.length === 0) {
+        setParseError(res.error ?? "No contacts found — try adding more detail (names, roles, emails, organisations).");
+      } else {
+        setParsedContacts(res.contacts);
+      }
     } finally {
       setParsing(false);
     }
@@ -435,6 +441,12 @@ export default function ContactsPage() {
                 placeholder={"e.g.\nSarah Jones — Chief Curator, Tate Modern — sarah.jones@tate.org.uk\n\nArtforum writer covering digital art. Based in New York.\n\nLVMH Foundation — Paris — contemporary art and digital media\n\nOr paste a full bio, LinkedIn excerpt, email footer, or any list..."}
                 className="w-full h-48 bg-studio-bg border border-studio-border rounded text-xs text-studio-text p-3 resize-none focus:outline-none focus:border-studio-accent placeholder:text-studio-text-muted/40"
               />
+              {parseError && (
+                <div className="flex items-start gap-2 mt-3 text-xs text-amber-400 bg-amber-950/20 border border-amber-700/30 rounded p-2">
+                  <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />
+                  <span>{parseError}</span>
+                </div>
+              )}
               <div className="flex justify-end mt-3">
                 <button onClick={handleParse} disabled={parsing || !pasteText.trim()} className="btn-primary flex items-center gap-2">
                   {parsing ? <RefreshCw size={12} className="animate-spin" /> : <Search size={12} />}
@@ -468,9 +480,8 @@ export default function ContactsPage() {
                   )}
                   <button
                     onClick={handleConfirm}
-                    disabled={saving || parsedContacts.length === 0 || parsedContacts.some(c => c.uncertain)}
+                    disabled={saving || parsedContacts.length === 0}
                     className="btn-primary flex items-center gap-2"
-                    title={parsedContacts.some(c => c.uncertain) ? "Assign categories to all highlighted contacts first" : undefined}
                   >
                     {saving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} />}
                     {saving ? "Saving..." : `Save ${parsedContacts.length} Contact${parsedContacts.length !== 1 ? "s" : ""}`}
