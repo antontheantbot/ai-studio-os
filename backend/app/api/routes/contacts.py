@@ -269,10 +269,10 @@ async def _save_contact(c: ParsedContact, db: AsyncSession) -> bool:
         emb_str = f"[{','.join(str(x) for x in emb)}]"
         await db.execute(text("""
             INSERT INTO corporations
-                (name, type, contact_name, contact_role, email, phone, website,
+                (id, name, type, contact_name, contact_role, email, phone, website,
                  city, country, focus_areas, tags, notes, social_links, embedding)
             VALUES
-                (:name, :type, :contact_name, :contact_role, :email, :phone, :website,
+                (gen_random_uuid(), :name, :type, :contact_name, :contact_role, :email, :phone, :website,
                  :city, :country, :focus_areas, :tags, :notes, CAST(:social_links AS jsonb), CAST(:embedding AS vector))
             ON CONFLICT (name) DO NOTHING
         """), {
