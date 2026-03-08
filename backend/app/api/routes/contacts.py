@@ -148,16 +148,16 @@ async def confirm_contacts(body: ConfirmBody, db: AsyncSession = Depends(get_db)
         cat = c.category
         try:
             saved = await _save_contact(c, db)
+            await db.commit()
             if saved:
                 results["added"] += 1
                 results["by_category"][cat] = results["by_category"].get(cat, 0) + 1
             else:
                 results["skipped"] += 1
         except Exception as e:
+            await db.rollback()
             logger.error(f"[Contacts/confirm] Failed saving {c.name}: {e}")
             results["skipped"] += 1
-
-    await db.commit()
 
     parts = [f"{v} {k}" for k, v in results["by_category"].items()]
     msg = f"Added {results['added']} contact(s)" + (f" ({', '.join(parts)})" if parts else "")
@@ -229,12 +229,11 @@ async def _save_contact(c: ParsedContact, db: AsyncSession) -> bool:
             INSERT INTO institutions
                 (id, name, city, country, type, website, focus_areas, notes)
             VALUES
-                (gen_random_uuid(), :name, :city, :country, :type, :website, CAST(:focus_areas AS jsonb), :notes)
-            ON CONFLICT (name) DO NOTHING
+                (gen_random_uuid(), :name, :city, :country, :type, :website, :focus_areas, :notes)
         """), {
             "name": name, "city": c.location, "country": c.country,
             "type": c.role, "website": c.website,
-            "focus_areas": json.dumps(c.tags), "notes": c.notes,
+            "focus_areas": c.tags, "notes": c.notes,
         })
         return True
 
