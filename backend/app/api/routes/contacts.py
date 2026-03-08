@@ -276,7 +276,7 @@ async def _save_contact(c: ParsedContact, db: AsyncSession) -> bool:
                  :city, :country, :focus_areas, :tags, :notes, CAST(:social_links AS jsonb), CAST(:embedding AS vector))
             ON CONFLICT (name) DO NOTHING
         """), {
-            "name": name, "type": c.role, "contact_name": None, "contact_role": None,
+            "name": name, "type": None, "contact_name": c.organization, "contact_role": c.role,
             "email": c.email, "phone": c.phone, "website": c.website,
             "city": c.location, "country": c.country, "focus_areas": c.tags, "tags": [],
             "notes": c.notes, "social_links": json.dumps(c.social_links), "embedding": emb_str,

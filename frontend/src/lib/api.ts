@@ -212,23 +212,32 @@ export interface ArchitectureLocation {
 export interface Collector {
   id: string;
   name: string;
-  bio: string;
-  location: string;
-  country: string;
+  bio: string | null;
+  location: string | null;
+  country: string | null;
   interests: string[];
   institutions: string[];
+  contact_email: string | null;
+  contact_url: string | null;
+  social_links: Record<string, string>;
+  notes: string | null;
   created_at: string;
 }
 
 export interface Curator {
   id: string;
   name: string;
-  bio: string;
-  institution: string;
-  role: string;
-  location: string;
+  bio: string | null;
+  institution: string | null;
+  role: string | null;
+  location: string | null;
+  country: string | null;
   focus_areas: string[];
   notable_shows: string[];
+  contact_email: string | null;
+  contact_url: string | null;
+  social_links: Record<string, string>;
+  notes: string | null;
   created_at: string;
 }
 

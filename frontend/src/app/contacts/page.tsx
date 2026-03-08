@@ -62,7 +62,7 @@ interface NormalisedContact {
 }
 
 function normaliseCurator(c: Curator): NormalisedContact {
-  return { id: c.id, name: c.name, role: c.role, organization: c.institution, email: (c as any).contact_email ?? null, location: c.location, country: (c as any).country ?? null, website: (c as any).contact_url ?? null, tags: c.focus_areas ?? [], category: "curator", created_at: c.created_at };
+  return { id: c.id, name: c.name, role: c.role, organization: c.institution, email: c.contact_email, location: c.location, country: c.country, website: c.contact_url, tags: c.focus_areas ?? [], category: "curator", created_at: c.created_at };
 }
 function normaliseJournalist(j: Journalist): NormalisedContact {
   return { id: j.id, name: j.name, role: null, organization: j.publications?.[0] ?? null, email: j.email, location: j.location, country: j.country, website: j.social_links?.website ?? null, tags: j.beats ?? [], category: "journalist", created_at: j.created_at };
@@ -71,7 +71,7 @@ function normaliseInstitution(i: Institution): NormalisedContact {
   return { id: i.id, name: i.name, role: i.type, organization: null, email: null, location: i.city, country: i.country, website: i.website, tags: i.focus_areas ?? [], category: "institution", created_at: i.created_at };
 }
 function normaliseCollector(c: Collector): NormalisedContact {
-  return { id: c.id, name: c.name, role: null, organization: c.institutions?.[0] ?? null, email: (c as any).contact_email ?? null, location: c.location, country: c.country, website: null, tags: c.interests ?? [], category: "collector", created_at: c.created_at };
+  return { id: c.id, name: c.name, role: null, organization: c.institutions?.[0] ?? null, email: c.contact_email, location: c.location, country: c.country, website: c.contact_url, tags: c.interests ?? [], category: "collector", created_at: c.created_at };
 }
 function normaliseCorporation(c: Corporation): NormalisedContact {
   return { id: c.id, name: c.name, role: c.type, organization: c.contact_name, email: c.email, location: c.city, country: c.country, website: c.website, tags: c.focus_areas ?? [], category: "corporation", created_at: c.created_at };
@@ -228,6 +228,7 @@ function CategoryPastePanel({
   const [pasteText, setPasteText] = useState("");
   const [adding, setAdding] = useState(false);
   const [result, setResult] = useState<{ message: string } | null>(null);
+
 
   const addFns: Record<string, (t: string) => Promise<{ added: number; skipped: number; message: string }>> = {
     curators:     addCuratorsFromText,
@@ -535,8 +536,9 @@ export default function ContactsPage() {
           </div>
 
           {/* Per-category paste panel (shown when not on All) */}
-          {tab !== "all" && (
+          {(["curators","journalists","institutions","collectors","corporations"] as Tab[]).includes(tab) && (
             <CategoryPastePanel
+              key={tab}
               category={tab}
               label={TABS.find(t => t.id === tab)?.label ?? tab}
               mutate={mutateAll}

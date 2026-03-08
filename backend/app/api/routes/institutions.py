@@ -103,7 +103,7 @@ _COLS = "id, name, city, country, type, website, focus_areas, annual_budget, dig
 
 @router.get("/")
 async def list_institutions(
-    q: str = Query(default=None),
+    q: str | None = Query(default=None),
     type: str = Query(default=None),
     digital_only: bool = Query(default=False),
     limit: int = Query(default=1000, le=5000),
