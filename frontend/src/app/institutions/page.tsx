@@ -1,50 +1,39 @@
 "use client";
 import { useState } from "react";
 import useSWR from "swr";
-import { Landmark, Plus, X, ExternalLink } from "lucide-react";
+import { Landmark, Plus, X, ExternalLink, RefreshCw, Check } from "lucide-react";
 import PageHeader from "@/components/PageHeader";
 import SearchBar from "@/components/SearchBar";
 import EmptyState from "@/components/EmptyState";
-import { getInstitutions, createInstitution, type Institution } from "@/lib/api";
-
-const INSTITUTION_TYPES = ["museum", "gallery", "kunsthalle", "biennial", "foundation", "residency", "university", "festival"];
-
-const EMPTY: Omit<Institution, "id" | "created_at"> = {
-  name: "",
-  city: null,
-  country: null,
-  type: null,
-  website: null,
-  focus_areas: [],
-  annual_budget: null,
-  digital_art_program: false,
-  notes: null,
-};
+import { getInstitutions, addInstitutionsFromText, type Institution } from "@/lib/api";
 
 export default function InstitutionsPage() {
   const [query, setQuery] = useState("");
   const [digitalOnly, setDigitalOnly] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-  const [form, setForm] = useState(EMPTY);
-  const [saving, setSaving] = useState(false);
+  const [showPaste, setShowPaste] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addResult, setAddResult] = useState<{ added: number; skipped: number; message: string } | null>(null);
 
   const { data, isLoading, mutate } = useSWR(
     ["institutions", query, digitalOnly],
     () => getInstitutions(query || undefined, digitalOnly || undefined)
   );
 
-  const set = (k: keyof typeof EMPTY) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-      setForm((f) => ({ ...f, [k]: e.target.value || null }));
-
-  const handleSave = async () => {
-    if (!form.name) return;
-    setSaving(true);
-    await createInstitution(form);
-    setForm(EMPTY);
-    setShowAdd(false);
-    setSaving(false);
-    mutate();
+  const handleAdd = async () => {
+    if (!pasteText.trim()) return;
+    setAdding(true);
+    setAddResult(null);
+    try {
+      const result = await addInstitutionsFromText(pasteText);
+      setAddResult(result);
+      if (result.added > 0) {
+        mutate();
+        setPasteText("");
+      }
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
@@ -53,80 +42,54 @@ export default function InstitutionsPage() {
         title="Institutions"
         description="Museums, galleries, kunsthalles and art foundations"
         actions={
-          <button onClick={() => setShowAdd(!showAdd)} className="btn-primary flex items-center gap-2">
-            {showAdd ? <X size={13} /> : <Plus size={13} />}
-            {showAdd ? "Cancel" : "Add Institution"}
+          <button
+            onClick={() => { setShowPaste(!showPaste); setAddResult(null); }}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={13} />
+            Add Entry
           </button>
         }
       />
 
-      {showAdd && (
-        <div className="card mb-4">
-          <h2 className="text-xs font-medium uppercase tracking-widest text-studio-text-muted mb-3">New Institution</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="text-xs text-studio-text-muted mb-1 block">Name *</label>
-              <input value={form.name} onChange={set("name")} placeholder="Institution name" />
-            </div>
-            <div>
-              <label className="text-xs text-studio-text-muted mb-1 block">Type</label>
-              <select
-                value={form.type ?? ""}
-                onChange={(e) => setForm((f) => ({ ...f, type: e.target.value || null }))}
-                className="bg-studio-surface border border-studio-border rounded px-3 py-2 text-studio-text w-full outline-none focus:border-studio-accent"
-              >
-                <option value="">— select type —</option>
-                {INSTITUTION_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-studio-text-muted mb-1 block">Website</label>
-              <input value={form.website ?? ""} onChange={set("website")} placeholder="https://" />
-            </div>
-            <div>
-              <label className="text-xs text-studio-text-muted mb-1 block">City</label>
-              <input value={form.city ?? ""} onChange={set("city")} placeholder="City" />
-            </div>
-            <div>
-              <label className="text-xs text-studio-text-muted mb-1 block">Country</label>
-              <input value={form.country ?? ""} onChange={set("country")} placeholder="Country" />
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-studio-text-muted mb-1 block">Focus Areas (comma-separated)</label>
-              <input
-                value={form.focus_areas.join(", ")}
-                onChange={(e) => setForm((f) => ({ ...f, focus_areas: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) }))}
-                placeholder="digital art, new media, video, performance"
-              />
-            </div>
-            <div>
-              <label className="text-xs text-studio-text-muted mb-1 block">Annual Budget</label>
-              <input value={form.annual_budget ?? ""} onChange={set("annual_budget")} placeholder="€2M" />
-            </div>
-            <div className="flex items-center gap-2 pt-5">
-              <input
-                type="checkbox"
-                id="digital_art_program"
-                checked={form.digital_art_program}
-                onChange={(e) => setForm((f) => ({ ...f, digital_art_program: e.target.checked }))}
-                className="w-4 h-4 accent-studio-accent"
-              />
-              <label htmlFor="digital_art_program" className="text-xs text-studio-text-muted cursor-pointer">
-                Has digital art program
-              </label>
-            </div>
-            <div className="col-span-2">
-              <label className="text-xs text-studio-text-muted mb-1 block">Notes</label>
-              <textarea value={form.notes ?? ""} onChange={set("notes")} placeholder="Internal notes..." rows={2} className="resize-none" />
-            </div>
+      {/* Paste panel */}
+      {showPaste && (
+        <div className="card mb-6 border-studio-accent/20">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-medium text-studio-text">Paste institution info</p>
+            <button onClick={() => { setShowPaste(false); setAddResult(null); }}
+              className="text-studio-text-muted hover:text-studio-text">
+              <X size={13} />
+            </button>
           </div>
-          <button onClick={handleSave} disabled={saving || !form.name} className="btn-primary w-full mt-3">
-            {saving ? "Saving & Embedding..." : "Save Institution"}
-          </button>
+          <p className="text-xs text-studio-text-muted mb-3">
+            Paste anything — names, bios, emails, LinkedIn profiles, lists. Claude will extract and add them automatically.
+          </p>
+          <textarea
+            value={pasteText}
+            onChange={e => setPasteText(e.target.value)}
+            placeholder={"e.g.\nHauser & Wirth — hauser-wirth.com — London, New York, Los Angeles\nGallery focused on contemporary and modern art\n\nOr paste a full description, website text, or any list of names..."}
+            className="w-full h-36 bg-studio-bg border border-studio-border rounded text-xs text-studio-text p-3 resize-none focus:outline-none focus:border-studio-accent placeholder:text-studio-text-muted/40"
+          />
+          <div className="flex items-center justify-between mt-3">
+            {addResult ? (
+              <div className="flex items-center gap-2 text-xs">
+                <Check size={12} className="text-studio-accent" />
+                <span className="text-studio-text">{addResult.message}</span>
+              </div>
+            ) : <div />}
+            <button
+              onClick={handleAdd}
+              disabled={adding || !pasteText.trim()}
+              className="btn-primary flex items-center gap-2"
+            >
+              {adding ? <RefreshCw size={12} className="animate-spin" /> : <Plus size={12} />}
+              {adding ? "Processing..." : "Add to Database"}
+            </button>
+          </div>
         </div>
       )}
+
 
       <div className="flex gap-3 mb-4">
         <div className="flex-1">

@@ -17,6 +17,8 @@ from app.api.routes import (
     briefs,
     journalists,
     daily,
+    corporations,
+    contacts,
 )
 
 router = APIRouter()
@@ -37,6 +39,8 @@ router.include_router(artworks.router, prefix="/artworks", tags=["artworks"])
 router.include_router(briefs.router, prefix="/briefs", tags=["briefs"])
 router.include_router(journalists.router, prefix="/journalists", tags=["journalists"])
 router.include_router(daily.router, prefix="/daily", tags=["daily"])
+router.include_router(corporations.router, prefix="/corporations", tags=["corporations"])
+router.include_router(contacts.router, prefix="/contacts", tags=["contacts"])
 
 
 @router.post("/scan/all", tags=["scan"])

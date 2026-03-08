@@ -26,6 +26,11 @@ export const triggerArchitectureScan = () =>
 // ── Collectors ───────────────────────────────────────────────────────────────
 export const getCollectors = (q?: string) =>
   request<Collector[]>(`/collectors/${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+export const addCollectorsFromText = (text: string) =>
+  request<{ added: number; skipped: number; message: string }>("/collectors/add", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
 
 // ── Curators ─────────────────────────────────────────────────────────────────
 export const getCurators = (q?: string) =>
@@ -92,6 +97,11 @@ export const createInstitution = (body: Omit<Institution, "id" | "created_at">) 
     method: "POST",
     body: JSON.stringify(body),
   });
+export const addInstitutionsFromText = (text: string) =>
+  request<{ added: number; skipped: number; message: string }>("/institutions/add", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
 
 // ── Exhibitions ───────────────────────────────────────────────────────────────
 export const getExhibitions = (q?: string, institution_id?: string) =>
@@ -122,6 +132,38 @@ export const addJournalistsFromText = (text: string) =>
     method: "POST",
     body: JSON.stringify({ text }),
   });
+
+// ── Curators (add) ────────────────────────────────────────────────────────────
+export const addCuratorsFromText = (text: string) =>
+  request<{ added: number; skipped: number; message: string }>("/curators/add", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+
+// ── Corporations ──────────────────────────────────────────────────────────────
+export const getCorporations = (q?: string) =>
+  request<Corporation[]>(`/corporations/${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+export const addCorporationsFromText = (text: string) =>
+  request<{ added: number; skipped: number; message: string }>("/corporations/add", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+export const scanCorporations = () =>
+  request<{ status: string }>("/corporations/scan", { method: "POST" });
+
+// ── Unified Contacts ──────────────────────────────────────────────────────────
+export const parseContacts = (text: string) =>
+  request<{ contacts: ParsedContact[] }>("/contacts/parse", {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
+export const confirmContacts = (contacts: ParsedContact[]) =>
+  request<{ added: number; skipped: number; message: string; by_category: Record<string, number> }>("/contacts/confirm", {
+    method: "POST",
+    body: JSON.stringify({ contacts }),
+  });
+export const scanAllContacts = () =>
+  request<{ status: string }>("/contacts/scan", { method: "POST" });
 
 // ── Daily Action ──────────────────────────────────────────────────────────────
 export const getDailyAction = () => request<DailyAction>("/daily/today");
@@ -326,6 +368,42 @@ export interface Journalist {
   country: string | null;
   notes: string | null;
   created_at: string;
+}
+
+export interface Corporation {
+  id: string;
+  name: string;
+  type: string | null;
+  contact_name: string | null;
+  contact_role: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  city: string | null;
+  country: string | null;
+  focus_areas: string[];
+  tags: string[];
+  notes: string | null;
+  source: string | null;
+  social_links: { twitter?: string; instagram?: string; linkedin?: string; website?: string };
+  created_at: string;
+}
+
+export interface ParsedContact {
+  category: "curator" | "journalist" | "institution" | "collector" | "corporation";
+  uncertain?: boolean;
+  name: string;
+  role: string | null;
+  organization: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  location: string | null;
+  country: string | null;
+  bio: string | null;
+  social_links: Record<string, string>;
+  tags: string[];
+  notes: string | null;
 }
 
 export interface ColorSizeTrend {

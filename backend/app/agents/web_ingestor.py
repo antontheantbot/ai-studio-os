@@ -70,6 +70,16 @@ JOURNALIST_QUERIES = [
     "frieze artforum hyperallergic journalist writer contact email",
 ]
 
+CORPORATION_QUERIES = [
+    "corporate art sponsorship digital new media art brand 2026",
+    "luxury brand art partnership digital installation commission",
+    "tech company art program new media digital art sponsor",
+    "PR agency art gallery representation digital media artist",
+    "corporate foundation art collection digital technology",
+    "art fair corporate partner digital new media sponsor email contact",
+    "brand art collaboration immersive installation experience",
+]
+
 KNOWLEDGE_QUERIES = [
     "how to write artist residency proposal digital art",
     "art world guide digital installation artist career",
@@ -164,6 +174,25 @@ Return a JSON array with fields:
 - notes (string, any useful context e.g. "covers emerging artists" or null)
 
 Only include real, named journalists with verifiable work. Prioritise those who cover art, culture, architecture or photography. Return [] if none found.
+
+Search results:
+{results}"""
+
+CORPORATION_PROMPT = """From these search results, extract corporate organisations relevant to an art world CRM.
+Include: brands, PR agencies, tech companies, luxury brands, foundations, corporate sponsors of art.
+Return a JSON array with fields:
+- name (string, organisation name — required)
+- type (string: brand, agency, foundation, tech, gallery, luxury, sponsor, or other)
+- contact_name (string, primary contact person or null)
+- contact_role (string, their title or null)
+- email (string, publicly listed email or null)
+- website (string, full URL or null)
+- city (string or null)
+- country (string or null)
+- focus_areas (array of strings, e.g. "digital art", "new media")
+- notes (string or null)
+
+Only include real, named organisations with verifiable art world relevance. Return [] if none found.
 
 Search results:
 {results}"""
@@ -513,6 +542,65 @@ class WebIngestor:
             await db.commit()
         return saved
 
+    # ─── Corporations ────────────────────────────────────────────────────────
+
+    async def scan_corporations(self) -> int:
+        total = 0
+        seen_names: set = set()
+        for query in CORPORATION_QUERIES:
+            try:
+                results_text = await self._search(query)
+                items = await self._extract(CORPORATION_PROMPT, results_text)
+                count = await self._save_corporations(items, seen_names)
+                total += count
+                logger.info(f"[WebIngestor/Corporations] '{query}': {count} saved")
+            except Exception as e:
+                logger.error(f"[WebIngestor/Corporations] Failed '{query}': {e}")
+        return total
+
+    async def _save_corporations(self, items: list[dict], seen: set) -> int:
+        saved = 0
+        async with AsyncSessionLocal() as db:
+            for item in items:
+                name = item.get("name", "").strip()
+                if not name or name in seen:
+                    continue
+                exists = await db.execute(
+                    text("SELECT id FROM corporations WHERE name = :name"), {"name": name}
+                )
+                if exists.first():
+                    seen.add(name)
+                    continue
+                embed_text = f"{name} {item.get('type', '')} {item.get('contact_name', '')} {' '.join(item.get('focus_areas', []))}"
+                embedding = await embed(embed_text)
+                embedding_str = f"[{','.join(str(x) for x in embedding)}]"
+                await db.execute(text("""
+                    INSERT INTO corporations
+                        (name, type, contact_name, contact_role, email, website,
+                         city, country, focus_areas, notes, social_links, embedding)
+                    VALUES
+                        (:name, :type, :contact_name, :contact_role, :email, :website,
+                         :city, :country, :focus_areas, :notes, CAST(:social_links AS jsonb), CAST(:embedding AS vector))
+                    ON CONFLICT (name) DO NOTHING
+                """), {
+                    "name": name,
+                    "type": item.get("type"),
+                    "contact_name": item.get("contact_name"),
+                    "contact_role": item.get("contact_role"),
+                    "email": item.get("email"),
+                    "website": item.get("website"),
+                    "city": item.get("city"),
+                    "country": item.get("country"),
+                    "focus_areas": item.get("focus_areas", []),
+                    "notes": item.get("notes"),
+                    "social_links": json.dumps({}),
+                    "embedding": embedding_str,
+                })
+                saved += 1
+                seen.add(name)
+            await db.commit()
+        return saved
+
     # ─── Journalists ─────────────────────────────────────────────────────────
 
     async def scan_journalists(self) -> int:
@@ -739,9 +827,10 @@ Search results:
             self.scan_press(),
             self.scan_knowledge(),
             self.scan_journalists(),
+            self.scan_corporations(),
             return_exceptions=True,
         )
-        categories = ["architecture", "collectors", "curators", "press", "knowledge", "journalists"]
+        categories = ["architecture", "collectors", "curators", "press", "knowledge", "journalists", "corporations"]
         summary = {}
         for cat, res in zip(categories, results):
             if isinstance(res, Exception):
@@ -790,3 +879,7 @@ async def enrich_journalists() -> int:
 
 async def enrich_recent_journalists(minutes: int = 10, batch_size: int = 10) -> int:
     return await _ingestor.enrich_recent_journalists(minutes=minutes, batch_size=batch_size)
+
+
+async def scan_corporations() -> int:
+    return await _ingestor.scan_corporations()

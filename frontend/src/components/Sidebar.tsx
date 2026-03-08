@@ -28,6 +28,7 @@ const NAV = [
   { href: "/architecture",  label: "Architecture",  icon: Building2 },
   { href: "/artists",       label: "Artists",       icon: Palette },
   { href: "/artworks",      label: "Artworks",      icon: Frame },
+  { href: "/contacts",      label: "Contacts",      icon: Users },
   { href: "/institutions",  label: "Institutions",  icon: Landmark },
   { href: "/exhibitions",   label: "Exhibitions",   icon: CalendarDays },
   { href: "/collectors",    label: "Collectors",    icon: Users },
