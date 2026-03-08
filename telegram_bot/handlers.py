@@ -39,10 +39,13 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/opportunities — open calls, residencies, commissions\n"
         "/grants — funding opportunities\n"
         "/contests — art competitions & prizes\n\n"
-        "👥 *People & Contacts*\n"
+        "👥 *Contacts*\n"
+        "/contacts — all contacts (search across all categories)\n"
+        "/curators — curators\n"
         "/journalists — press contacts & writers\n"
+        "/institutions — museums, galleries, foundations\n"
         "/collectors — art collectors\n"
-        "/curators — curators\n\n"
+        "/corporations — companies, brands, sponsors\n\n"
         "📊 *Market Intelligence*\n"
         "/brief — latest art market brief\n"
         "/colors — trending colors & sizes\n\n"
@@ -134,6 +137,103 @@ async def contests_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 line += f"\n{o['url']}"
             lines.append(line)
         await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+# ── Contacts (unified) ────────────────────────────────────────────────────────
+
+async def contacts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args) if context.args else None
+    await update.message.chat.send_action("typing")
+    try:
+        params = {"q": query} if query else {}
+        curators     = await _api_get("/curators/",     params)
+        journalists  = await _api_get("/journalists/",  params)
+        institutions = await _api_get("/institutions/", params)
+        collectors   = await _api_get("/collectors/",   params)
+        corporations = await _api_get("/corporations/", params)
+
+        sections = [
+            ("Curators",     curators),
+            ("Journalists",  journalists),
+            ("Institutions", institutions),
+            ("Collectors",   collectors),
+            ("Corporations", corporations),
+        ]
+        lines = []
+        for label, items in sections:
+            if items:
+                lines.append(f"*{label} ({len(items)})*")
+                for c in items[:3]:
+                    name = c.get("name", "")
+                    role = c.get("role") or c.get("type") or ""
+                    org  = c.get("institution") or c.get("organization") or c.get("contact_name") or ""
+                    email = c.get("email") or c.get("contact_email") or ""
+                    detail = " · ".join(x for x in [role, org] if x)
+                    line = f"• *{name}*" + (f" — {detail}" if detail else "")
+                    if email:
+                        line += f"\n  {email}"
+                    lines.append(line)
+                if len(items) > 3:
+                    lines.append(f"  _...and {len(items)-3} more_")
+        if not lines:
+            await update.message.reply_text("No contacts found.")
+            return
+        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def institutions_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args) if context.args else None
+    await update.message.chat.send_action("typing")
+    try:
+        params = {"q": query} if query else {}
+        items = await _api_get("/institutions/", params)
+        if not items:
+            await update.message.reply_text("No institutions found.")
+            return
+        lines = []
+        for i in items[:8]:
+            line = f"*{i['name']}*"
+            loc = ", ".join(x for x in [i.get("city"), i.get("country")] if x)
+            if loc:
+                line += f" — {loc}"
+            if i.get("type"):
+                line += f"\n_{i['type']}_"
+            if i.get("website"):
+                line += f"\n{i['website']}"
+            lines.append(line)
+        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def corporations_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = " ".join(context.args) if context.args else None
+    await update.message.chat.send_action("typing")
+    try:
+        params = {"q": query} if query else {}
+        items = await _api_get("/corporations/", params)
+        if not items:
+            await update.message.reply_text("No corporations found.")
+            return
+        lines = []
+        for c in items[:8]:
+            line = f"*{c['name']}*"
+            loc = ", ".join(x for x in [c.get("city"), c.get("country")] if x)
+            if loc:
+                line += f" — {loc}"
+            if c.get("contact_name"):
+                line += f"\n_{c['contact_name']}"
+                if c.get("contact_role"):
+                    line += f", {c['contact_role']}"
+                line += "_"
+            if c.get("email"):
+                line += f"\n{c['email']}"
+            lines.append(line)
+        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown")
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -312,11 +412,73 @@ async def scan_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Chat (fallback) ───────────────────────────────────────────────────────────
 
+# Keyword → API endpoint mapping. Extend this dict as new sections are added.
+_SECTION_ROUTES = {
+    ("curator", "curators"):                        "/curators/",
+    ("journalist", "journalists", "press", "media"): "/journalists/",
+    ("institution", "institutions", "museum", "gallery"): "/institutions/",
+    ("collector", "collectors"):                    "/collectors/",
+    ("corporation", "corporations", "company", "brand", "sponsor"): "/corporations/",
+    ("opportunity", "opportunities", "open call"):  "/opportunities/",
+    ("grant", "grants", "funding"):                 "/opportunities/",
+    ("contest", "contests", "prize", "award"):      "/opportunities/",
+}
+
+
+def _detect_section(text: str) -> tuple[str, str] | None:
+    """Return (endpoint, label) if the message matches a known section."""
+    lower = text.lower()
+    for keywords, endpoint in _SECTION_ROUTES.items():
+        if any(kw in lower for kw in keywords):
+            return endpoint, keywords[0]
+    return None
+
+
 async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
     history = _history.get(user_id, [])
     await update.message.chat.send_action("typing")
+
+    # Extract search query — anything after "find"/"search"/"show me" etc.
+    import re
+    q_match = re.search(r'(?:find|search|show|list|get)\s+(?:me\s+)?(.+)', text, re.I)
+    query = q_match.group(1).strip() if q_match else None
+
+    # Auto-route to the right section if recognised
+    route = _detect_section(text)
+    if route:
+        endpoint, label = route
+        try:
+            params = {"q": query} if query else {}
+            if "opportunities" in endpoint:
+                params["upcoming_only"] = "true"
+                params["limit"] = "20"
+            items = await _api_get(endpoint, params)
+            if items:
+                lines = [f"*{label.title()}s found: {len(items)}*"]
+                for item in items[:6]:
+                    name = item.get("name") or item.get("title", "")
+                    detail = " · ".join(x for x in [
+                        item.get("role") or item.get("type") or item.get("category") or "",
+                        item.get("institution") or item.get("organization") or item.get("contact_name") or item.get("organizer") or "",
+                    ] if x)
+                    email = item.get("email") or item.get("contact_email") or ""
+                    line = f"• *{name}*" + (f" — {detail}" if detail else "")
+                    if email:
+                        line += f"\n  {email}"
+                    lines.append(line)
+                if len(items) > 6:
+                    lines.append(f"_...and {len(items)-6} more. Use the app to see all._")
+                history.append({"role": "user", "content": text})
+                history.append({"role": "assistant", "content": "\n".join(lines)})
+                _history[user_id] = history[-20:]
+                await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+                return
+        except Exception:
+            pass  # fall through to chat
+
+    # Default: send to AI chat endpoint
     try:
         data = await _api_post("/chat/", {"message": text, "history": history[-10:]})
         response_text = data["response"]

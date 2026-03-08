@@ -16,9 +16,12 @@ from handlers import (
     opportunities_handler,
     grants_handler,
     contests_handler,
+    contacts_handler,
     journalists_handler,
     collectors_handler,
     curators_handler,
+    institutions_handler,
+    corporations_handler,
     brief_handler,
     colors_handler,
     daily_handler,
@@ -44,10 +47,13 @@ def main():
     app.add_handler(CommandHandler("grants", grants_handler))
     app.add_handler(CommandHandler("contests", contests_handler))
 
-    # People
+    # Contacts
+    app.add_handler(CommandHandler("contacts", contacts_handler))
     app.add_handler(CommandHandler("journalists", journalists_handler))
     app.add_handler(CommandHandler("collectors", collectors_handler))
     app.add_handler(CommandHandler("curators", curators_handler))
+    app.add_handler(CommandHandler("institutions", institutions_handler))
+    app.add_handler(CommandHandler("corporations", corporations_handler))
 
     # Market Intelligence
     app.add_handler(CommandHandler("brief", brief_handler))
