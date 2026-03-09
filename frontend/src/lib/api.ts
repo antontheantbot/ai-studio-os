@@ -152,6 +152,29 @@ export const scanCorporations = () =>
   request<{ status: string }>("/corporations/scan", { method: "POST" });
 
 // ── Unified Contacts ──────────────────────────────────────────────────────────
+export interface Contact {
+  id: string;
+  category: "journalist" | "curator" | "collector" | "institution" | "corporation" | "unknown";
+  name: string;
+  role: string | null;
+  organization: string | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  location: string | null;
+  country: string | null;
+  bio: string | null;
+  social_links: Record<string, string>;
+  tags: string[];
+  notes: string | null;
+  meta: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getContacts = (q?: string, category?: string) =>
+  request<Contact[]>(`/contacts/${q || category ? `?${new URLSearchParams({ ...(q ? { q } : {}), ...(category ? { category } : {}) })}` : ""}`);
+
 export const parseContacts = (text: string) =>
   request<{ contacts: ParsedContact[]; error?: string }>("/contacts/parse", {
     method: "POST",

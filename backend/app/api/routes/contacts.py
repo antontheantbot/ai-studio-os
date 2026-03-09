@@ -1,13 +1,13 @@
 """
-Unified Contacts API — parse free-form text into structured contacts across all categories,
-with a confirm step before saving to the appropriate underlying table.
+Unified Contacts API — single contacts table with category field.
 """
 import json
 import re
 import logging
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 
 from app.db.session import get_db
 from app.services.llm import generate
@@ -15,8 +15,6 @@ from app.services.embeddings import embed
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# ─── Parse prompt ─────────────────────────────────────────────────────────────
 
 PARSE_PROMPT = """You are extracting contact information from pasted text for an art world CRM.
 
@@ -56,7 +54,6 @@ Category guide:
 Text to parse:
 {text}"""
 
-# ─── Schemas ──────────────────────────────────────────────────────────────────
 
 class ParseBody(BaseModel):
     text: str
@@ -83,7 +80,36 @@ class ConfirmBody(BaseModel):
     contacts: list[ParsedContact]
 
 
-# ─── Parse (no save) ─────────────────────────────────────────────────────────
+VALID_CATEGORIES = ("curator", "journalist", "institution", "collector", "corporation", "unknown")
+
+
+@router.get("/")
+async def list_contacts(
+    q: str | None = Query(None),
+    category: str | None = Query(None),
+    limit: int = Query(5000, le=5000),
+    db: AsyncSession = Depends(get_db),
+):
+    conditions = []
+    params: dict = {"limit": limit}
+
+    if q:
+        conditions.append(
+            "(name ILIKE :q OR organization ILIKE :q OR email ILIKE :q OR role ILIKE :q OR location ILIKE :q OR bio ILIKE :q OR tags::text ILIKE :q)"
+        )
+        params["q"] = f"%{q}%"
+
+    if category and category in VALID_CATEGORIES:
+        conditions.append("category = :category")
+        params["category"] = category
+
+    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+    result = await db.execute(
+        text(f"SELECT * FROM contacts {where} ORDER BY name LIMIT :limit"),
+        params,
+    )
+    return [dict(r._mapping) for r in result]
+
 
 @router.post("/parse")
 async def parse_contacts(body: ParseBody):
@@ -98,25 +124,23 @@ async def parse_contacts(body: ParseBody):
     start = raw.find("[")
     end = raw.rfind("]")
     if start == -1 or end == -1 or end <= start:
-        logger.error(f"[Contacts/parse] No JSON array found in response: {raw[:500]}")
         return {"contacts": [], "error": "Could not extract contacts — try rephrasing or adding more detail"}
 
     try:
         items = json.loads(raw[start:end + 1])
     except json.JSONDecodeError as e:
-        logger.error(f"[Contacts/parse] JSON decode error: {e} | raw: {raw[start:end+1][:300]}")
+        logger.error(f"[Contacts/parse] JSON decode error: {e}")
         return {"contacts": [], "error": "Parsing failed — try again or simplify the text"}
 
-    # Normalise and validate
     contacts = []
     for item in items:
         name = (item.get("name") or "").strip()
         if not name:
             continue
         cat = (item.get("category") or "").lower()
-        uncertain = bool(item.get("uncertain")) or cat not in ("curator", "journalist", "institution", "collector", "corporation")
-        if cat not in ("curator", "journalist", "institution", "collector", "corporation"):
-            cat = "curator"
+        uncertain = bool(item.get("uncertain")) or cat not in VALID_CATEGORIES
+        if cat not in VALID_CATEGORIES:
+            cat = "unknown"
         contacts.append({
             "category": cat,
             "uncertain": uncertain,
@@ -137,26 +161,50 @@ async def parse_contacts(body: ParseBody):
     return {"contacts": contacts}
 
 
-# ─── Confirm (save) ──────────────────────────────────────────────────────────
-
 @router.post("/confirm")
 async def confirm_contacts(body: ConfirmBody, db: AsyncSession = Depends(get_db)):
-    """Save the (user-reviewed) parsed contacts to the appropriate tables."""
+    """Save parsed contacts to the unified contacts table."""
     results = {"added": 0, "skipped": 0, "by_category": {}}
 
     for c in body.contacts:
-        cat = c.category
+        cat = c.category if c.category in VALID_CATEGORIES else "unknown"
+        name = c.name.strip()
         try:
-            saved = await _save_contact(c, db)
-            await db.commit()
-            if saved:
-                results["added"] += 1
-                results["by_category"][cat] = results["by_category"].get(cat, 0) + 1
-            else:
+            exists = await db.execute(
+                text("SELECT id FROM contacts WHERE name = :n AND category = :cat"),
+                {"n": name, "cat": cat}
+            )
+            if exists.first():
                 results["skipped"] += 1
+                continue
+
+            embed_text = f"{name} {c.organization or ''} {c.bio or ''} {' '.join(c.tags)}"
+            emb = await embed(embed_text)
+            emb_str = f"[{','.join(str(x) for x in emb)}]"
+
+            await db.execute(text("""
+                INSERT INTO contacts
+                    (category, name, role, organization, email, phone, website,
+                     location, country, bio, social_links, tags, notes, embedding)
+                VALUES
+                    (:category, :name, :role, :organization, :email, :phone, :website,
+                     :location, :country, :bio, CAST(:social_links AS jsonb), :tags, :notes,
+                     CAST(:embedding AS vector))
+                ON CONFLICT (name, category) DO NOTHING
+            """), {
+                "category": cat, "name": name, "role": c.role, "organization": c.organization,
+                "email": c.email, "phone": c.phone, "website": c.website,
+                "location": c.location, "country": c.country, "bio": c.bio,
+                "social_links": json.dumps(c.social_links), "tags": c.tags,
+                "notes": c.notes, "embedding": emb_str,
+            })
+            await db.commit()
+            results["added"] += 1
+            results["by_category"][cat] = results["by_category"].get(cat, 0) + 1
+
         except Exception as e:
             await db.rollback()
-            logger.error(f"[Contacts/confirm] Failed saving {c.name}: {e}")
+            logger.error(f"[Contacts/confirm] Failed saving {name}: {e}")
             results["skipped"] += 1
 
     parts = [f"{v} {k}" for k, v in results["by_category"].items()]
@@ -166,127 +214,6 @@ async def confirm_contacts(body: ConfirmBody, db: AsyncSession = Depends(get_db)
 
     return {**results, "message": msg}
 
-
-async def _save_contact(c: ParsedContact, db: AsyncSession) -> bool:
-    """Route contact to the correct table. Returns True if inserted."""
-    from sqlalchemy import text
-
-    name = c.name.strip()
-
-    if c.category == "journalist":
-        exists = await db.execute(text("SELECT id FROM journalists WHERE name = :n"), {"n": name})
-        if exists.first():
-            return False
-        await db.execute(text("""
-            INSERT INTO journalists
-                (id, name, bio, publications, beats, email, social_links, location, country, notes)
-            VALUES
-                (gen_random_uuid(), :name, :bio, CAST(:publications AS jsonb), CAST(:beats AS jsonb),
-                 :email, CAST(:social_links AS jsonb), :location, :country, :notes)
-            ON CONFLICT (name) DO NOTHING
-        """), {
-            "name": name,
-            "bio": c.bio,
-            "publications": json.dumps([c.organization] if c.organization else []),
-            "beats": json.dumps(c.tags),
-            "email": c.email,
-            "social_links": json.dumps(c.social_links),
-            "location": c.location,
-            "country": c.country,
-            "notes": c.notes,
-        })
-        return True
-
-    elif c.category == "curator":
-        exists = await db.execute(text("SELECT id FROM curators WHERE name = :n"), {"n": name})
-        if exists.first():
-            return False
-        embed_text = f"{name} {c.organization or ''} {c.bio or ''} {' '.join(c.tags)}"
-        emb = await embed(embed_text)
-        emb_str = f"[{','.join(str(x) for x in emb)}]"
-        await db.execute(text("""
-            INSERT INTO curators
-                (name, bio, institution, role, location, country,
-                 focus_areas, notable_shows, contact_email, contact_url, social_links, notes, embedding)
-            VALUES
-                (:name, :bio, :institution, :role, :location, :country,
-                 :focus_areas, :notable_shows, :contact_email, :contact_url,
-                 CAST(:social_links AS jsonb), :notes, CAST(:embedding AS vector))
-            ON CONFLICT DO NOTHING
-        """), {
-            "name": name, "bio": c.bio, "institution": c.organization, "role": c.role,
-            "location": c.location, "country": c.country, "focus_areas": c.tags,
-            "notable_shows": [], "contact_email": c.email, "contact_url": c.website,
-            "social_links": json.dumps(c.social_links), "notes": c.notes, "embedding": emb_str,
-        })
-        return True
-
-    elif c.category == "institution":
-        exists = await db.execute(text("SELECT id FROM institutions WHERE name = :n"), {"n": name})
-        if exists.first():
-            return False
-        await db.execute(text("""
-            INSERT INTO institutions
-                (id, name, city, country, type, website, focus_areas, notes)
-            VALUES
-                (gen_random_uuid(), :name, :city, :country, :type, :website, :focus_areas, :notes)
-        """), {
-            "name": name, "city": c.location, "country": c.country,
-            "type": c.role, "website": c.website,
-            "focus_areas": c.tags, "notes": c.notes,
-        })
-        return True
-
-    elif c.category == "collector":
-        exists = await db.execute(text("SELECT id FROM collectors WHERE name = :n"), {"n": name})
-        if exists.first():
-            return False
-        embed_text = f"{name} {c.bio or ''} {' '.join(c.tags)}"
-        emb = await embed(embed_text)
-        emb_str = f"[{','.join(str(x) for x in emb)}]"
-        await db.execute(text("""
-            INSERT INTO collectors
-                (name, bio, location, country, interests, known_works, institutions,
-                 contact_email, contact_url, social_links, notes, embedding)
-            VALUES
-                (:name, :bio, :location, :country, :interests, :known_works, :institutions,
-                 :contact_email, :contact_url, CAST(:social_links AS jsonb), :notes, CAST(:embedding AS vector))
-            ON CONFLICT (name) DO NOTHING
-        """), {
-            "name": name, "bio": c.bio, "location": c.location, "country": c.country,
-            "interests": c.tags, "known_works": [], "institutions": [c.organization] if c.organization else [],
-            "contact_email": c.email, "contact_url": c.website,
-            "social_links": json.dumps(c.social_links), "notes": c.notes, "embedding": emb_str,
-        })
-        return True
-
-    elif c.category == "corporation":
-        exists = await db.execute(text("SELECT id FROM corporations WHERE name = :n"), {"n": name})
-        if exists.first():
-            return False
-        embed_text = f"{name} {c.role or ''} {' '.join(c.tags)}"
-        emb = await embed(embed_text)
-        emb_str = f"[{','.join(str(x) for x in emb)}]"
-        await db.execute(text("""
-            INSERT INTO corporations
-                (id, name, type, contact_name, contact_role, email, phone, website,
-                 city, country, focus_areas, tags, notes, social_links, embedding)
-            VALUES
-                (gen_random_uuid(), :name, :type, :contact_name, :contact_role, :email, :phone, :website,
-                 :city, :country, :focus_areas, :tags, :notes, CAST(:social_links AS jsonb), CAST(:embedding AS vector))
-            ON CONFLICT (name) DO NOTHING
-        """), {
-            "name": name, "type": None, "contact_name": c.organization, "contact_role": c.role,
-            "email": c.email, "phone": c.phone, "website": c.website,
-            "city": c.location, "country": c.country, "focus_areas": c.tags, "tags": [],
-            "notes": c.notes, "social_links": json.dumps(c.social_links), "embedding": emb_str,
-        })
-        return True
-
-    return False
-
-
-# ─── Scan all ─────────────────────────────────────────────────────────────────
 
 @router.post("/scan")
 async def scan_all_contacts(background_tasks: BackgroundTasks):
