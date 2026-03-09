@@ -20,6 +20,7 @@ import {
   PenLine,
   Zap,
   Send,
+  Radio,
 } from "lucide-react";
 
 const NAV = [
@@ -40,6 +41,7 @@ const NAV = [
   { href: "/knowledge",     label: "Knowledge",     icon: BookOpen },
   { href: "/daily",          label: "Daily Action",   icon: Zap },
   { href: "/press-outreach", label: "Press Outreach", icon: Send },
+  { href: "/press-monitor",  label: "Press Monitor",  icon: Radio },
   { href: "/chat",           label: "Chat",           icon: MessageSquare },
 ];
 
