@@ -302,46 +302,134 @@ export default function PressMonitorPage() {
 
             {/* JOURNALISTS TAB */}
             {tab === "journalists" && (
-              <Section title={`TARGET JOURNALISTS (${journalists.length})`}>
-                {journalists.length === 0 ? <Empty>No journalists yet</Empty> : journalists.map(j => (
-                  <Row key={j.id}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                      <div>
-                        <span style={{ fontWeight: 600, color: "#e8e0c8" }}>{j.name}</span>
-                        <span style={{ color: "#555", margin: "0 6px" }}>·</span>
-                        <span style={{ color: "#888" }}>{j.publication}</span>
-                        {j.role && <span style={{ color: "#555", fontSize: 10, marginLeft: 8 }}>{j.role}</span>}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <AddFromContacts onAdded={load} />
+                <Section title={`TARGET JOURNALISTS (${journalists.length})`}>
+                  {journalists.length === 0 ? <Empty>No journalists yet</Empty> : journalists.map(j => (
+                    <Row key={j.id}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                          <span style={{ fontWeight: 600, color: "#e8e0c8" }}>{j.name}</span>
+                          <span style={{ color: "#555", margin: "0 6px" }}>·</span>
+                          <span style={{ color: "#888" }}>{j.publication}</span>
+                          {j.role && <span style={{ color: "#555", fontSize: 10, marginLeft: 8 }}>{j.role}</span>}
+                          {j.contact_id && (
+                            <span style={{ marginLeft: 8, fontSize: 9, color: "#5aaa82", letterSpacing: 1 }}>LINKED</span>
+                          )}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={{ fontSize: 9, letterSpacing: 1, color: "#555" }}>{TIER_LABELS[j.tier_level]}</span>
+                          <span style={{
+                            fontSize: 9, padding: "2px 6px", borderRadius: 2,
+                            background: "#1a1a0a", border: `1px solid ${STATUS_COLORS[j.pitch_status] || "#333"}`,
+                            color: STATUS_COLORS[j.pitch_status] || "#666", letterSpacing: 1,
+                          }}>
+                            {(j.pitch_status || "").replace(/_/g, " ").toUpperCase()}
+                          </span>
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <span style={{ fontSize: 9, letterSpacing: 1, color: "#555" }}>{TIER_LABELS[j.tier_level]}</span>
-                        <span style={{
-                          fontSize: 9, padding: "2px 6px", borderRadius: 2,
-                          background: "#1a1a0a", border: `1px solid ${STATUS_COLORS[j.pitch_status] || "#333"}`,
-                          color: STATUS_COLORS[j.pitch_status] || "#666", letterSpacing: 1,
-                        }}>
-                          {(j.pitch_status || "").replace(/_/g, " ").toUpperCase()}
-                        </span>
+                      {j.beats && j.beats.length > 0 && (
+                        <div style={{ fontSize: 10, color: "#555", marginTop: 4 }}>
+                          {(j.beats as string[]).join(" · ")}
+                        </div>
+                      )}
+                      {j.bio && <div style={{ fontSize: 11, color: "#666", marginTop: 4, fontStyle: "italic" }}>{j.bio}</div>}
+                      <div style={{ display: "flex", gap: 16, marginTop: 4, flexWrap: "wrap" }}>
+                        {j.email && <span style={{ fontSize: 10, color: "#444" }}>{j.email}</span>}
+                        {j.location && <span style={{ fontSize: 10, color: "#444" }}>{j.location}</span>}
+                        {j.publications && j.publications.length > 0 && (
+                          <span style={{ fontSize: 10, color: "#555" }}>{(j.publications as string[]).join(", ")}</span>
+                        )}
                       </div>
-                    </div>
-                    {j.beats && j.beats.length > 0 && (
-                      <div style={{ fontSize: 10, color: "#555", marginTop: 4 }}>
-                        {j.beats.join(" · ")}
-                      </div>
-                    )}
-                    {j.email && <div style={{ fontSize: 10, color: "#444", marginTop: 2 }}>{j.email}</div>}
-                    {j.follow_up_date && (
-                      <div style={{ fontSize: 10, color: "#e8b84b", marginTop: 4 }}>
-                        Follow-up: {new Date(j.follow_up_date).toLocaleDateString()}
-                      </div>
-                    )}
-                    {j.notes && <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>{j.notes}</div>}
-                  </Row>
-                ))}
-              </Section>
+                      {j.social_links && Object.keys(j.social_links).length > 0 && (
+                        <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+                          {Object.entries(j.social_links as Record<string, string>).map(([k, v]) => v ? (
+                            <a key={k} href={v} target="_blank" rel="noreferrer"
+                              style={{ fontSize: 9, color: "#555", letterSpacing: 1, textTransform: "uppercase" }}>
+                              {k}
+                            </a>
+                          ) : null)}
+                        </div>
+                      )}
+                      {j.follow_up_date && (
+                        <div style={{ fontSize: 10, color: "#e8b84b", marginTop: 4 }}>
+                          Follow-up: {new Date(j.follow_up_date).toLocaleDateString()}
+                        </div>
+                      )}
+                      {j.notes && <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>{j.notes}</div>}
+                    </Row>
+                  ))}
+                </Section>
+              </div>
             )}
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function AddFromContacts({ onAdded }: { onAdded: () => void }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [adding, setAdding] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (query.length < 2) { setResults([]); return; }
+    const t = setTimeout(async () => {
+      const r = await fetch(`${API}/press-monitor/journalists/search-contacts?q=${encodeURIComponent(query)}`).then(r => r.json()).catch(() => []);
+      setResults(Array.isArray(r) ? r : []);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  async function add(contact: any) {
+    setAdding(contact.id);
+    const pub = contact.publications?.[0] || "";
+    await fetch(`${API}/press-monitor/journalists/from-contact/${contact.id}?publication=${encodeURIComponent(pub)}&tier=2`, { method: "POST" });
+    setAdding(null);
+    setQuery("");
+    setResults([]);
+    onAdded();
+  }
+
+  return (
+    <div style={{ background: "#0f0f00", border: "1px solid #1a1a0a", padding: "12px 14px", borderRadius: 2 }}>
+      <div style={{ fontSize: 9, letterSpacing: 2, color: "#555", marginBottom: 8 }}>ADD FROM CONTACTS</div>
+      <input
+        value={query}
+        onChange={e => setQuery(e.target.value)}
+        placeholder="Search journalists in contacts..."
+        style={{
+          width: "100%", background: "#0a0a00", border: "1px solid #2a2a1a",
+          color: "#d4d0c8", padding: "6px 10px", fontSize: 11, borderRadius: 2,
+          outline: "none", boxSizing: "border-box",
+        }}
+      />
+      {results.length > 0 && (
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+          {results.map((c: any) => (
+            <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 8px", background: "#0a0a00", border: "1px solid #1a1a0a" }}>
+              <div>
+                <span style={{ color: "#e8e0c8", fontSize: 12 }}>{c.name}</span>
+                {c.publications?.[0] && <span style={{ color: "#555", fontSize: 10, marginLeft: 8 }}>{c.publications[0]}</span>}
+                {c.location && <span style={{ color: "#444", fontSize: 10, marginLeft: 8 }}>{c.location}</span>}
+              </div>
+              {c.already_targeted ? (
+                <span style={{ fontSize: 9, color: "#555", letterSpacing: 1 }}>ALREADY ADDED</span>
+              ) : (
+                <button
+                  onClick={() => add(c)}
+                  disabled={adding === c.id}
+                  style={{ padding: "3px 10px", fontSize: 9, background: "#1a1a0a", border: "1px solid #c9a84c", color: "#c9a84c", cursor: "pointer", borderRadius: 2 }}
+                >
+                  {adding === c.id ? "ADDING..." : "ADD"}
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

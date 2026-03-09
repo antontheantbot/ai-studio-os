@@ -8,11 +8,13 @@ from fastapi import APIRouter, Depends, Query, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, and_
 from sqlalchemy.orm import selectinload
+import uuid as uuid_lib
 
 from app.db.session import get_db
 from app.models.press_monitor import (
     CoverageMention, TargetJournalist, JournalistArticle, PressBrief
 )
+from app.models.journalist import Journalist
 
 router = APIRouter()
 
@@ -67,7 +69,8 @@ async def list_journalists(
     tier: Optional[int] = Query(None, ge=1, le=4),
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(TargetJournalist).options(selectinload(TargetJournalist.articles))
+    stmt = (select(TargetJournalist)
+            .options(selectinload(TargetJournalist.articles), selectinload(TargetJournalist.contact)))
     if status:
         stmt = stmt.where(TargetJournalist.pitch_status == status)
     if tier:
@@ -75,17 +78,99 @@ async def list_journalists(
     stmt = stmt.order_by(TargetJournalist.tier.asc(), TargetJournalist.name.asc())
     result = await db.execute(stmt)
     journalists = result.scalars().all()
+    return [_journalist_dict(j) for j in journalists]
+
+
+def _journalist_dict(j: TargetJournalist) -> dict:
+    c = j.contact
+    return {
+        "id": j.id, "name": j.name,
+        "email": j.email or (c.email if c else None),
+        "publication": j.publication,
+        "role": j.role, "beats": j.beat or (c.beats if c else []),
+        "tier_level": j.tier, "pitch_status": j.pitch_status,
+        "follow_up_date": j.follow_up_date.isoformat() if j.follow_up_date else None,
+        "last_pitched_at": j.last_pitched_at.isoformat() if j.last_pitched_at else None,
+        "notes": j.notes,
+        "article_count": len(j.articles),
+        "actionable_count": sum(1 for a in j.articles if a.is_actionable and not a.actioned),
+        # contact enrichment
+        "contact_id": str(j.journalist_id) if j.journalist_id else None,
+        "bio": c.bio if c else None,
+        "location": c.location if c else None,
+        "social_links": c.social_links if c else {},
+        "publications": c.publications if c else [],
+    }
+
+
+@router.get("/journalists/search-contacts")
+async def search_contacts_to_add(q: str = Query(..., min_length=2), db: AsyncSession = Depends(get_db)):
+    """Search the contacts journalists table for people not yet in target_journalists."""
+    pattern = f"%{q}%"
+    result = await db.execute(
+        select(Journalist).where(
+            Journalist.name.ilike(pattern)
+        ).limit(20)
+    )
+    contacts = result.scalars().all()
+
+    # Find which ones are already targeted
+    targeted_result = await db.execute(
+        select(TargetJournalist.journalist_id).where(TargetJournalist.journalist_id.isnot(None))
+    )
+    targeted_ids = {str(r[0]) for r in targeted_result.all()}
+
     return [
-        {"id": j.id, "name": j.name, "email": j.email, "publication": j.publication,
-         "role": j.role, "beats": j.beat or [], "tier_level": j.tier,
-         "pitch_status": j.pitch_status,
-         "follow_up_date": j.follow_up_date.isoformat() if j.follow_up_date else None,
-         "last_pitched_at": j.last_pitched_at.isoformat() if j.last_pitched_at else None,
-         "notes": j.notes,
-         "article_count": len(j.articles),
-         "actionable_count": sum(1 for a in j.articles if a.is_actionable and not a.actioned)}
-        for j in journalists
+        {"id": str(c.id), "name": c.name, "email": c.email,
+         "publications": c.publications or [], "beats": c.beats or [],
+         "location": c.location, "bio": c.bio,
+         "already_targeted": str(c.id) in targeted_ids}
+        for c in contacts
     ]
+
+
+@router.post("/journalists/from-contact/{contact_id}")
+async def add_journalist_from_contact(
+    contact_id: str,
+    publication: Optional[str] = None,
+    role: Optional[str] = None,
+    tier: int = 2,
+    db: AsyncSession = Depends(get_db),
+):
+    """Promote a contact to a target journalist."""
+    result = await db.execute(select(Journalist).where(Journalist.id == uuid_lib.UUID(contact_id)))
+    contact = result.scalar_one_or_none()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found.")
+
+    existing = await db.execute(
+        select(TargetJournalist).where(TargetJournalist.journalist_id == contact.id))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail=f"{contact.name} is already a target journalist.")
+
+    pub = publication or (contact.publications[0] if contact.publications else "Unknown")
+    journalist = TargetJournalist(
+        name=contact.name, email=contact.email,
+        publication=pub, role=role,
+        beat=contact.beats or [], tier=tier,
+        journalist_id=contact.id,
+    )
+    db.add(journalist)
+    await db.commit()
+    await db.refresh(journalist)
+    return {"id": journalist.id, "name": journalist.name, "publication": journalist.publication, "contact_id": contact_id}
+
+
+@router.patch("/journalists/{journalist_id}/link-contact/{contact_id}")
+async def link_contact(journalist_id: int, contact_id: str, db: AsyncSession = Depends(get_db)):
+    """Link an existing target journalist to a contact record."""
+    result = await db.execute(select(TargetJournalist).where(TargetJournalist.id == journalist_id))
+    j = result.scalar_one_or_none()
+    if not j:
+        raise HTTPException(status_code=404, detail="Journalist not found.")
+    j.journalist_id = uuid_lib.UUID(contact_id)
+    await db.commit()
+    return {"linked": True}
 
 
 @router.post("/journalists")

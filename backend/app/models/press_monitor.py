@@ -5,7 +5,7 @@ from sqlalchemy import (
     Column, Integer, String, Text, Float, Boolean, DateTime, Date,
     ForeignKey, Index, CheckConstraint, UniqueConstraint
 )
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -46,6 +46,8 @@ class TargetJournalist(Base):
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    journalist_id = Column(UUID(as_uuid=True), ForeignKey("journalists.id", ondelete="SET NULL"), nullable=True)
+    contact = relationship("Journalist", foreign_keys=[journalist_id])
     articles = relationship("JournalistArticle", back_populates="journalist", cascade="all, delete-orphan")
     __table_args__ = (
         UniqueConstraint("name", "publication", name="uq_journalist_publication"),
