@@ -58,6 +58,26 @@ async def _weekly_market_scan_loop():
         await asyncio.sleep(7 * 24 * 60 * 60)
 
 
+async def _press_monitor_loop():
+    """Run press coverage scan, journalist scan, and brief generation daily."""
+    await asyncio.sleep(150)  # stagger after other scans
+    while True:
+        try:
+            logger.info("[Scheduler] Starting press coverage scan")
+            from app.agents.press_monitor import scan_coverage, scan_journalists, generate_brief
+            await asyncio.to_thread(scan_coverage)
+            logger.info("[Scheduler] Press coverage scan complete")
+            await asyncio.sleep(3600)  # wait 1hr before journalist scan
+            await asyncio.to_thread(scan_journalists)
+            logger.info("[Scheduler] Press journalist scan complete")
+            await asyncio.sleep(3600)  # wait 1hr before brief
+            await asyncio.to_thread(generate_brief)
+            logger.info("[Scheduler] Press brief generated")
+        except Exception as e:
+            logger.error(f"[Scheduler] Press monitor error: {e}")
+        await asyncio.sleep(24 * 60 * 60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create tables on startup (use Alembic migrations in production)
@@ -66,10 +86,12 @@ async def lifespan(app: FastAPI):
     task = asyncio.create_task(_daily_scan_loop())
     market_task = asyncio.create_task(_weekly_market_scan_loop())
     journalist_task = asyncio.create_task(_weekly_journalist_scan_loop())
+    press_task = asyncio.create_task(_press_monitor_loop())
     yield
     task.cancel()
     market_task.cancel()
     journalist_task.cancel()
+    press_task.cancel()
     await engine.dispose()
 
 

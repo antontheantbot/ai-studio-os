@@ -6,6 +6,7 @@ from app.api.routes import (
     collectors,
     curators,
     press,
+    press_monitor,
     proposals,
     knowledge,
     chat,
@@ -28,6 +29,7 @@ router.include_router(architecture.router, prefix="/architecture", tags=["archit
 router.include_router(collectors.router, prefix="/collectors", tags=["collectors"])
 router.include_router(curators.router, prefix="/curators", tags=["curators"])
 router.include_router(press.router, prefix="/press", tags=["press"])
+router.include_router(press_monitor.router, prefix="/press-monitor", tags=["press-monitor"])
 router.include_router(proposals.router, prefix="/proposals", tags=["proposals"])
 router.include_router(knowledge.router, prefix="/knowledge", tags=["knowledge"])
 router.include_router(chat.router, prefix="/chat", tags=["chat"])

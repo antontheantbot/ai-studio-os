@@ -27,3 +27,5 @@ __all__ = [
     "DailyAction",
     "Corporation",
 ]
+
+from .press_monitor import CoverageMention, TargetJournalist, JournalistArticle, PressBrief

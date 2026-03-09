@@ -3,6 +3,8 @@ Telegram command and message handlers.
 All intelligence comes from the FastAPI backend.
 """
 import os
+import re
+import html
 import httpx
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -11,6 +13,11 @@ API_BASE = os.getenv("API_BASE_URL", "http://api:8000/api/v1")
 
 # Per-user conversation history (in-memory; reset on bot restart)
 _history: dict[int, list[dict]] = {}
+
+
+def _h(text) -> str:
+    """Escape a value for safe use in HTML Telegram messages."""
+    return html.escape(str(text)) if text else ""
 
 
 def _truncate(text: str, limit: int = 200) -> str:
@@ -31,31 +38,39 @@ async def _api_post(path: str, json: dict = None):
         return resp.json()
 
 
+async def _send_html(update: Update, text: str, preview: bool = False):
+    """Send an HTML-formatted message, splitting if over Telegram's 4096 char limit."""
+    chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+    for chunk in chunks:
+        await update.message.reply_text(chunk, parse_mode="HTML", disable_web_page_preview=not preview)
+
+
+# ── Start / Help ──────────────────────────────────────────────────────────────
+
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "*AI Studio OS*\n\n"
+    await _send_html(update,
+        "<b>AI Studio OS</b>\n\n"
         "Your art career assistant. Commands:\n\n"
-        "📋 *Opportunities & Grants*\n"
+        "📋 <b>Opportunities &amp; Grants</b>\n"
         "/opportunities — open calls, residencies, commissions\n"
         "/grants — funding opportunities\n"
-        "/contests — art competitions & prizes\n\n"
-        "👥 *Contacts*\n"
-        "/contacts — all contacts (search across all categories)\n"
+        "/contests — art competitions &amp; prizes\n\n"
+        "👥 <b>Contacts</b>\n"
+        "/contacts — all contacts overview\n"
         "/curators — curators\n"
-        "/journalists — press contacts & writers\n"
+        "/journalists — press contacts &amp; writers\n"
         "/institutions — museums, galleries, foundations\n"
         "/collectors — art collectors\n"
         "/corporations — companies, brands, sponsors\n\n"
-        "📊 *Market Intelligence*\n"
+        "📊 <b>Market Intelligence</b>\n"
         "/brief — latest art market brief\n"
-        "/colors — trending colors & sizes\n\n"
-        "🎯 *Daily Action*\n"
+        "/colors — trending colors &amp; sizes\n\n"
+        "🎯 <b>Daily Action</b>\n"
         "/daily — today's career action\n\n"
-        "🔍 *Search & Scan*\n"
-        "/search <query> — search knowledge base\n"
+        "🔍 <b>Search &amp; Scan</b>\n"
+        "/search &lt;query&gt; — search knowledge base\n"
         "/scan — trigger full web scan\n\n"
-        "Or just chat naturally.",
-        parse_mode="Markdown",
+        "Or just chat naturally."
     )
 
 
@@ -73,24 +88,23 @@ async def opportunities_handler(update: Update, context: ContextTypes.DEFAULT_TY
         if query:
             params["q"] = query
         items = await _api_get("/opportunities/", params)
-        # exclude grants and contests
         items = [o for o in items if o.get("category") not in ("grant", "contest")][:8]
         if not items:
             await update.message.reply_text("No opportunities found.")
             return
         lines = []
         for o in items:
-            line = f"*{o['title']}*"
-            meta = [o.get("category", "")]
+            line = f"<b>{_h(o['title'])}</b>"
+            meta = [_h(o.get("category", ""))]
             if o.get("deadline"):
-                meta.append(f"Deadline: {o['deadline']}")
+                meta.append(f"Deadline: {_h(o['deadline'])}")
             if o.get("award"):
-                meta.append(f"Award: {o['award']}")
-            line += f"\n_{', '.join(m for m in meta if m)}_"
+                meta.append(f"Award: {_h(o['award'])}")
+            line += f"\n<i>{', '.join(m for m in meta if m)}</i>"
             if o.get("url"):
-                line += f"\n{o['url']}"
+                line += f"\n{_h(o['url'])}"
             lines.append(line)
-        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
+        await _send_html(update, "\n\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -105,15 +119,15 @@ async def grants_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         lines = []
         for o in grants:
-            line = f"*{o['title']}*"
+            line = f"<b>{_h(o['title'])}</b>"
             if o.get("deadline"):
-                line += f"\n_Deadline: {o['deadline']}_"
+                line += f"\n<i>Deadline: {_h(o['deadline'])}</i>"
             if o.get("award"):
-                line += f"\n_Award: {o['award']}_"
+                line += f"\n<i>Award: {_h(o['award'])}</i>"
             if o.get("url"):
-                line += f"\n{o['url']}"
+                line += f"\n{_h(o['url'])}"
             lines.append(line)
-        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
+        await _send_html(update, "\n\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -128,15 +142,15 @@ async def contests_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         lines = []
         for o in contests:
-            line = f"*{o['title']}*"
+            line = f"<b>{_h(o['title'])}</b>"
             if o.get("award"):
-                line += f"\n_Prize: {o['award']}_"
+                line += f"\n<i>Prize: {_h(o['award'])}</i>"
             if o.get("deadline"):
-                line += f"\n_Deadline: {o['deadline']}_"
+                line += f"\n<i>Deadline: {_h(o['deadline'])}</i>"
             if o.get("url"):
-                line += f"\n{o['url']}"
+                line += f"\n{_h(o['url'])}"
             lines.append(line)
-        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
+        await _send_html(update, "\n\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -161,26 +175,26 @@ async def contacts_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ("Collectors",   collectors),
             ("Corporations", corporations),
         ]
-        lines = []
+        lines = [f"<b>Contacts{' matching &quot;' + _h(query) + '&quot;' if query else ''}</b>\n"]
         for label, items in sections:
             if items:
-                lines.append(f"*{label} ({len(items)})*")
+                lines.append(f"<b>{label} ({len(items)})</b>")
                 for c in items[:3]:
-                    name = c.get("name", "")
-                    role = c.get("role") or c.get("type") or ""
-                    org  = c.get("institution") or c.get("organization") or c.get("contact_name") or ""
-                    email = c.get("email") or c.get("contact_email") or ""
+                    name = _h(c.get("name", ""))
+                    role = _h(c.get("role") or c.get("type") or "")
+                    org  = _h(c.get("institution") or c.get("organization") or c.get("contact_name") or "")
+                    email = _h(c.get("email") or c.get("contact_email") or "")
                     detail = " · ".join(x for x in [role, org] if x)
-                    line = f"• *{name}*" + (f" — {detail}" if detail else "")
+                    line = f"• <b>{name}</b>" + (f" — {detail}" if detail else "")
                     if email:
                         line += f"\n  {email}"
                     lines.append(line)
                 if len(items) > 3:
-                    lines.append(f"  _...and {len(items)-3} more_")
-        if not lines:
+                    lines.append(f"  <i>...and {len(items)-3} more</i>")
+        if len(lines) == 1:
             await update.message.reply_text("No contacts found.")
             return
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+        await _send_html(update, "\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -194,18 +208,21 @@ async def institutions_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if not items:
             await update.message.reply_text("No institutions found.")
             return
-        lines = []
+        total = len(items)
+        lines = [f"<b>Institutions ({total} total){' matching &quot;' + _h(query) + '&quot;' if query else ''}</b>\n"]
         for i in items[:8]:
-            line = f"*{i['name']}*"
+            line = f"• <b>{_h(i['name'])}</b>"
             loc = ", ".join(x for x in [i.get("city"), i.get("country")] if x)
             if loc:
-                line += f" — {loc}"
+                line += f" — {_h(loc)}"
             if i.get("type"):
-                line += f"\n_{i['type']}_"
+                line += f"\n  <i>{_h(i['type'])}</i>"
             if i.get("website"):
-                line += f"\n{i['website']}"
+                line += f"\n  {_h(i['website'])}"
             lines.append(line)
-        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
+        if total > 8:
+            lines.append(f"\n<i>...and {total - 8} more. Use /institutions &lt;name&gt; to search.</i>")
+        await _send_html(update, "\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -219,21 +236,24 @@ async def corporations_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         if not items:
             await update.message.reply_text("No corporations found.")
             return
-        lines = []
+        total = len(items)
+        lines = [f"<b>Corporations ({total} total){' matching &quot;' + _h(query) + '&quot;' if query else ''}</b>\n"]
         for c in items[:8]:
-            line = f"*{c['name']}*"
+            line = f"• <b>{_h(c['name'])}</b>"
             loc = ", ".join(x for x in [c.get("city"), c.get("country")] if x)
             if loc:
-                line += f" — {loc}"
+                line += f" — {_h(loc)}"
             if c.get("contact_name"):
-                line += f"\n_{c['contact_name']}"
+                role_str = _h(c['contact_name'])
                 if c.get("contact_role"):
-                    line += f", {c['contact_role']}"
-                line += "_"
+                    role_str += f", {_h(c['contact_role'])}"
+                line += f"\n  <i>{role_str}</i>"
             if c.get("email"):
-                line += f"\n{c['email']}"
+                line += f"\n  {_h(c['email'])}"
             lines.append(line)
-        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown")
+        if total > 8:
+            lines.append(f"\n<i>...and {total - 8} more. Use /corporations &lt;name&gt; to search.</i>")
+        await _send_html(update, "\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -244,30 +264,31 @@ async def journalists_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = " ".join(context.args) if context.args else None
     await update.message.chat.send_action("typing")
     try:
-        params = {}
-        if query:
-            params["q"] = query
+        params = {"q": query} if query else {}
         items = await _api_get("/journalists/", params)
         if not items:
             await update.message.reply_text("No journalists found. Try /scan to update.")
             return
-        lines = []
+        total = len(items)
+        lines = [f"<b>Journalists ({total} total){' matching &quot;' + _h(query) + '&quot;' if query else ''}</b>\n"]
         for j in items[:8]:
-            line = f"*{j['name']}*"
+            line = f"• <b>{_h(j['name'])}</b>"
             if j.get("location"):
-                line += f" — {j['location']}"
+                line += f" — {_h(j['location'])}"
             if j.get("publications"):
-                line += f"\n_{', '.join(j['publications'][:3])}_"
+                line += f"\n  <i>{_h(', '.join(j['publications'][:3]))}</i>"
             if j.get("beats"):
-                line += f"\nBeats: {', '.join(j['beats'][:3])}"
+                line += f"\n  Beats: {_h(', '.join(j['beats'][:3]))}"
             if j.get("email"):
-                line += f"\n{j['email']}"
+                line += f"\n  {_h(j['email'])}"
             elif j.get("social_links"):
                 socials = [v for v in j["social_links"].values() if v]
                 if socials:
-                    line += f"\n{socials[0]}"
+                    line += f"\n  {_h(socials[0])}"
             lines.append(line)
-        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown", disable_web_page_preview=True)
+        if total > 8:
+            lines.append(f"\n<i>...and {total - 8} more. Use /journalists &lt;name&gt; to search.</i>")
+        await _send_html(update, "\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -276,24 +297,25 @@ async def collectors_handler(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = " ".join(context.args) if context.args else None
     await update.message.chat.send_action("typing")
     try:
-        params = {}
-        if query:
-            params["q"] = query
+        params = {"q": query} if query else {}
         items = await _api_get("/collectors/", params)
         if not items:
             await update.message.reply_text("No collectors found.")
             return
-        lines = []
+        total = len(items)
+        lines = [f"<b>Collectors ({total} total){' matching &quot;' + _h(query) + '&quot;' if query else ''}</b>\n"]
         for c in items[:8]:
-            line = f"*{c['name']}*"
+            line = f"• <b>{_h(c['name'])}</b>"
             if c.get("location"):
-                line += f" — {c['location']}"
+                line += f" — {_h(c['location'])}"
             if c.get("interests"):
-                line += f"\n_Interests: {', '.join(c['interests'][:3])}_"
+                line += f"\n  <i>Interests: {_h(', '.join(c['interests'][:3]))}</i>"
             if c.get("bio"):
-                line += f"\n{_truncate(c['bio'], 150)}"
+                line += f"\n  {_h(_truncate(c['bio'], 150))}"
             lines.append(line)
-        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown")
+        if total > 8:
+            lines.append(f"\n<i>...and {total - 8} more. Use /collectors &lt;name&gt; to search.</i>")
+        await _send_html(update, "\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -302,24 +324,25 @@ async def curators_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = " ".join(context.args) if context.args else None
     await update.message.chat.send_action("typing")
     try:
-        params = {}
-        if query:
-            params["q"] = query
+        params = {"q": query} if query else {}
         items = await _api_get("/curators/", params)
         if not items:
             await update.message.reply_text("No curators found.")
             return
-        lines = []
+        total = len(items)
+        lines = [f"<b>Curators ({total} total){' matching &quot;' + _h(query) + '&quot;' if query else ''}</b>\n"]
         for c in items[:8]:
-            line = f"*{c['name']}*"
+            line = f"• <b>{_h(c['name'])}</b>"
             if c.get("institution"):
-                line += f" — {c['institution']}"
+                line += f" — {_h(c['institution'])}"
             if c.get("role"):
-                line += f"\n_{c['role']}_"
+                line += f"\n  <i>{_h(c['role'])}</i>"
             if c.get("focus_areas"):
-                line += f"\nFocus: {', '.join(c['focus_areas'][:3])}"
+                line += f"\n  Focus: {_h(', '.join(c['focus_areas'][:3]))}"
             lines.append(line)
-        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown")
+        if total > 8:
+            lines.append(f"\n<i>...and {total - 8} more. Use /curators &lt;name&gt; to search.</i>")
+        await _send_html(update, "\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -333,11 +356,11 @@ async def brief_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not brief or not brief.get("brief"):
             await update.message.reply_text("No market brief yet. Use /scan to generate one.")
             return
-        text = f"*{brief['title']}*\n_Week of {brief['week_of']}_\n\n"
+        text = f"<b>{_h(brief['title'])}</b>\n<i>Week of {_h(brief['week_of'])}</i>\n\n"
         if brief.get("top_mediums"):
-            text += f"Trending: {', '.join(brief['top_mediums'][:4])}\n\n"
-        text += _truncate(brief["brief"], 800)
-        await update.message.reply_text(text, parse_mode="Markdown")
+            text += f"Trending: {_h(', '.join(brief['top_mediums'][:4]))}\n\n"
+        text += _h(_truncate(brief["brief"], 800))
+        await _send_html(update, text)
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -349,18 +372,18 @@ async def colors_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not data:
             await update.message.reply_text("No color trend data yet.")
             return
-        lines = [f"*Color & Size Trends — Week of {data['week_of']}*"]
+        lines = [f"<b>Color &amp; Size Trends — Week of {_h(data['week_of'])}</b>"]
         if data.get("summary"):
-            lines.append(f"\n{_truncate(data['summary'], 300)}")
+            lines.append(f"\n{_h(_truncate(data['summary'], 300))}")
         if data.get("popular_colors"):
-            lines.append("\n*Popular Colors:*")
+            lines.append("\n<b>Popular Colors:</b>")
             for c in data["popular_colors"][:5]:
-                lines.append(f"• {c['name']} `{c['hex']}` [{c['trend']}]")
+                lines.append(f"• {_h(c['name'])} <code>{_h(c['hex'])}</code> [{_h(c['trend'])}]")
         if data.get("popular_sizes"):
-            lines.append("\n*Popular Sizes:*")
+            lines.append("\n<b>Popular Sizes:</b>")
             for s in data["popular_sizes"][:5]:
-                lines.append(f"• {s['label']} {s['dimensions']} · {s['medium']} [{s['trend']}]")
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+                lines.append(f"• {_h(s['label'])} {_h(s['dimensions'])} · {_h(s['medium'])} [{_h(s['trend'])}]")
+        await _send_html(update, "\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -374,11 +397,11 @@ async def daily_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not action or not action.get("content"):
             await update.message.reply_text("Generating today's action...")
             action = await _api_post("/daily/generate")
-        text = f"*Daily Action — {action['date']}*\n"
+        text = f"<b>Daily Action — {_h(action['date'])}</b>\n"
         if action.get("goal_name"):
-            text += f"_Goal: {action['goal_name']}_\n\n"
-        text += action["content"]
-        await update.message.reply_text(text, parse_mode="Markdown")
+            text += f"<i>Goal: {_h(action['goal_name'])}</i>\n\n"
+        text += _h(action["content"])
+        await _send_html(update, text)
     except Exception as e:
         await update.message.reply_text(f"Error: {e}")
 
@@ -396,8 +419,8 @@ async def search_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not items:
             await update.message.reply_text("No results found.")
             return
-        lines = [f"*{i+1}. {item['title']}*\n{_truncate(item.get('summary', ''), 200)}" for i, item in enumerate(items)]
-        await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown")
+        lines = [f"<b>{i+1}. {_h(item['title'])}</b>\n{_h(_truncate(item.get('summary', ''), 200))}" for i, item in enumerate(items)]
+        await _send_html(update, "\n\n".join(lines))
     except Exception as e:
         await update.message.reply_text(f"Search failed: {e}")
 
@@ -412,21 +435,20 @@ async def scan_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Chat (fallback) ───────────────────────────────────────────────────────────
 
-# Keyword → API endpoint mapping. Extend this dict as new sections are added.
+# Keyword → API endpoint mapping
 _SECTION_ROUTES = {
-    ("curator", "curators"):                        "/curators/",
-    ("journalist", "journalists", "press", "media"): "/journalists/",
-    ("institution", "institutions", "museum", "gallery"): "/institutions/",
-    ("collector", "collectors"):                    "/collectors/",
+    ("curator", "curators"):                                       "/curators/",
+    ("journalist", "journalists", "press", "media"):               "/journalists/",
+    ("institution", "institutions", "museum", "gallery"):          "/institutions/",
+    ("collector", "collectors"):                                   "/collectors/",
     ("corporation", "corporations", "company", "brand", "sponsor"): "/corporations/",
-    ("opportunity", "opportunities", "open call"):  "/opportunities/",
-    ("grant", "grants", "funding"):                 "/opportunities/",
-    ("contest", "contests", "prize", "award"):      "/opportunities/",
+    ("opportunity", "opportunities", "open call"):                 "/opportunities/",
+    ("grant", "grants", "funding"):                                "/opportunities/",
+    ("contest", "contests", "prize", "award"):                     "/opportunities/",
 }
 
 
 def _detect_section(text: str) -> tuple[str, str] | None:
-    """Return (endpoint, label) if the message matches a known section."""
     lower = text.lower()
     for keywords, endpoint in _SECTION_ROUTES.items():
         if any(kw in lower for kw in keywords):
@@ -440,12 +462,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     history = _history.get(user_id, [])
     await update.message.chat.send_action("typing")
 
-    # Extract search query — anything after "find"/"search"/"show me" etc.
-    import re
     q_match = re.search(r'(?:find|search|show|list|get)\s+(?:me\s+)?(.+)', text, re.I)
     query = q_match.group(1).strip() if q_match else None
 
-    # Auto-route to the right section if recognised
     route = _detect_section(text)
     if route:
         endpoint, label = route
@@ -456,24 +475,25 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 params["limit"] = "20"
             items = await _api_get(endpoint, params)
             if items:
-                lines = [f"*{label.title()}s found: {len(items)}*"]
+                lines = [f"<b>{_h(label.title())}s found: {len(items)}</b>"]
                 for item in items[:6]:
-                    name = item.get("name") or item.get("title", "")
+                    name = _h(item.get("name") or item.get("title", ""))
                     detail = " · ".join(x for x in [
-                        item.get("role") or item.get("type") or item.get("category") or "",
-                        item.get("institution") or item.get("organization") or item.get("contact_name") or item.get("organizer") or "",
+                        _h(item.get("role") or item.get("type") or item.get("category") or ""),
+                        _h(item.get("institution") or item.get("organization") or item.get("contact_name") or item.get("organizer") or ""),
                     ] if x)
-                    email = item.get("email") or item.get("contact_email") or ""
-                    line = f"• *{name}*" + (f" — {detail}" if detail else "")
+                    email = _h(item.get("email") or item.get("contact_email") or "")
+                    line = f"• <b>{name}</b>" + (f" — {detail}" if detail else "")
                     if email:
                         line += f"\n  {email}"
                     lines.append(line)
                 if len(items) > 6:
-                    lines.append(f"_...and {len(items)-6} more. Use the app to see all._")
+                    lines.append(f"<i>...and {len(items)-6} more. Use the app to see all.</i>")
+                reply = "\n".join(lines)
                 history.append({"role": "user", "content": text})
-                history.append({"role": "assistant", "content": "\n".join(lines)})
+                history.append({"role": "assistant", "content": reply})
                 _history[user_id] = history[-20:]
-                await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+                await _send_html(update, reply)
                 return
         except Exception:
             pass  # fall through to chat
@@ -484,11 +504,11 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         response_text = data["response"]
         sources = data.get("sources", [])
         if sources:
-            response_text += f"\n\n_Sources: {', '.join(sources[:3])}_"
+            response_text += f"\n\nSources: {', '.join(sources[:3])}"
         history.append({"role": "user", "content": text})
         history.append({"role": "assistant", "content": data["response"]})
         _history[user_id] = history[-20:]
-        await update.message.reply_text(response_text, parse_mode="Markdown")
+        await _send_html(update, _h(response_text))
     except httpx.HTTPError as e:
         await update.message.reply_text(f"API error: {e}")
     except Exception as e:
