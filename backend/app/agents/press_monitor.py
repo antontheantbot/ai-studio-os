@@ -145,7 +145,7 @@ def scan_coverage():
         ])
 
         analysis = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=4000,
             system="You are a press monitoring assistant for contemporary artists Ryan Koopmans and Alice Wexell. Analyze search results and determine which are genuine mentions. Filter out false positives. Return JSON.",
             messages=[{
@@ -242,7 +242,7 @@ def scan_journalists():
             ])
 
             analysis = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=3000,
                 system=f"""You are an art world press strategist for Ryan Koopmans and Alice Wexell, a Stockholm-based artist duo whose work "The Wild Within" explores nature reclaiming abandoned architecture through photography, 3D digital sculpting, and time-based media.
 
@@ -441,7 +441,7 @@ def _format_telegram_brief(content: dict) -> str:
 
 
 def _push_to_telegram(message: str):
-    import requests
+    import httpx
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     if not bot_token or not chat_id:
@@ -450,9 +450,9 @@ def _push_to_telegram(message: str):
     chunks = [message[i:i+4000] for i in range(0, len(message), 4000)]
     for chunk in chunks:
         try:
-            requests.post(
+            httpx.post(
                 f"https://api.telegram.org/bot{bot_token}/sendMessage",
-                json={"chat_id": chat_id, "text": chunk, "parse_mode": None},
+                json={"chat_id": chat_id, "text": chunk},
                 timeout=10,
             )
         except Exception as e:

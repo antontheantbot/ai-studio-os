@@ -2,7 +2,7 @@
 "use client";
 import { useState, useEffect } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API = "/api/v1";
 
 const SENTIMENT_COLOR = {
   positive: "#5aaa82",
@@ -172,6 +172,9 @@ export default function PressMonitorPage() {
                     <Row key={j.id}>
                       <div style={{ fontWeight: 600, color: "#e8b84b" }}>{j.name}</div>
                       <div style={{ fontSize: 11, color: "#888" }}>{j.publication} · {j.email}</div>
+                      <div style={{ fontSize: 10, color: j.days_until <= 0 ? "#e8b84b" : "#666", marginTop: 2 }}>
+                        {j.days_until <= 0 ? `Overdue by ${Math.abs(j.days_until)}d` : `Due in ${j.days_until}d`}
+                      </div>
                       {j.notes && <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>{j.notes}</div>}
                     </Row>
                   ))}

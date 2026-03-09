@@ -202,22 +202,20 @@ async def latest_brief(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/follow-ups")
-async def follow_ups_due(include_past: bool = Query(True), db: AsyncSession = Depends(get_db)):
+async def follow_ups_due(days_ahead: int = Query(14), db: AsyncSession = Depends(get_db)):
     today = date.today()
+    cutoff = today + timedelta(days=days_ahead)
     stmt = select(TargetJournalist).where(
         TargetJournalist.follow_up_date.isnot(None),
-        TargetJournalist.pitch_status.in_(["pitched", "follow_up_due"]))
-    if include_past:
-        stmt = stmt.where(TargetJournalist.follow_up_date <= today)
-    else:
-        stmt = stmt.where(TargetJournalist.follow_up_date == today)
-    stmt = stmt.order_by(TargetJournalist.follow_up_date.asc())
+        TargetJournalist.pitch_status.in_(["pitched", "follow_up_due"]),
+        TargetJournalist.follow_up_date <= cutoff,
+    ).order_by(TargetJournalist.follow_up_date.asc())
     result = await db.execute(stmt)
     journalists = result.scalars().all()
     return [
         {"id": j.id, "name": j.name, "email": j.email, "publication": j.publication,
          "follow_up_date": j.follow_up_date.isoformat(),
-         "days_overdue": (today - j.follow_up_date).days, "notes": j.notes}
+         "days_until": (j.follow_up_date - today).days, "notes": j.notes}
         for j in journalists
     ]
 
